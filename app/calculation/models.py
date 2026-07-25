@@ -1,0 +1,53 @@
+from typing import Annotated, Literal
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+Length = Annotated[int, Field(strict=True, ge=1, le=1_000_000)]
+Count = Annotated[int, Field(strict=True, ge=1, le=100_000)]
+Condition = Annotated[int, Field(strict=True, ge=0, le=10_000)]
+
+class Model(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+class Part(Model):
+    length_mm: Length
+    quantity: Count
+
+class Remnant(Part):
+    pass
+
+class Conditions(Model):
+    new_stock_length_mm: Length
+    kerf_mm: Condition
+    left_trim_mm: Condition = 10
+
+class Inventory(Model):
+    new_stock_quantity: Annotated[int, Field(strict=True, ge=0, le=100_000)]
+    remnants: list[Remnant] = Field(default_factory=list, max_length=1000)
+
+class CalculationInput(Model):
+    mode: Literal["required_stock", "inventory"]
+    cutting_conditions: Conditions
+    required_parts: list[Part] = Field(min_length=1, max_length=1000)
+    inventory: Inventory | None = None
+
+    @model_validator(mode="after")
+    def valid(self):
+        if (self.mode == "inventory") != (self.inventory is not None):
+            raise ValueError("modeとinventoryが一致しません")
+        if sum(x.quantity for x in self.required_parts) > 1_000_000:
+            raise ValueError("合計必要本数は1000000以下です")
+        return self
+
+class CalculationResult(Model):
+    mode: str
+    required_stock_quantity: int
+    additional_new_stock_required: int
+    existing_remnant_used: int
+    inventory_new_stock_used: int
+    patterns: list[dict]
+    stock_usage: list[dict]
+    unused_inventory: list[dict]
+    dimension_change_count: int
+    initial_setup_count: int
+    machine_setting_count: int
+    fulfillment: list[dict]

@@ -1,0 +1,21 @@
+﻿services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: nesting1d-dev
+
+    working_dir: /workspace/nesting1d
+
+    user: developer
+
+    volumes:
+      - .:/workspace/nesting1d
+      - codex-data:/home/developer/.codex
+
+    command: sleep infinity
+
+volumes:
+  codex-data:
+    name: nesting1d-codex-data

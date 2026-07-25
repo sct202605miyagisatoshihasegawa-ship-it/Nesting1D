@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+    <title>Nesting1D</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='/css/style.css') }}"
+    >
+</head>
+
+<body>
+    <main class="container">
+        <header class="page-header">
+            <p class="eyebrow">1D CUTTING OPTIMIZER</p>
+            <h1>Nesting1D</h1>
+
+            <p class="description">
+                一次元ネスティング計算アプリ
+            </p>
+        </header>
+
+        <section class="status-card">
+            <h2>開発環境</h2>
+
+            <dl>
+                <div>
+                    <dt>Webサーバー</dt>
+                    <dd>FastAPI / Uvicorn</dd>
+                </div>
+
+                <div>
+                    <dt>状態</dt>
+                    <dd class="status-ok">正常に稼働しています</dd>
+                </div>
+            </dl>
+        </section>
+    </main>
+</body>
+</html>

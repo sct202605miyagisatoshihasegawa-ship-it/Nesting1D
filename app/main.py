@@ -1,12 +1,17 @@
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request
+from pydantic import ValidationError
+from app.calculation import CalculationInput, calculate
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 
 BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_FORM={"mode":"required_stock","title":"","material_type":"","author":"","notes":"","new_stock_length_mm":"","kerf_mm":"0","left_trim_mm":"10","new_stock_quantity":"0","part_lengths":[""],"part_quantities":[""],"remnant_lengths":[""],"remnant_quantities":[""]}
+
 
 app = FastAPI(
     title="Nesting1D",
@@ -30,8 +35,58 @@ def read_root(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={},
+        context={"form":DEFAULT_FORM,"errors":[],"result":None},
     )
+
+
+def _integer(value:str,label:str,minimum:int,maximum:int,errors:list[str])->int|None:
+    text=value.strip()
+    if not text:
+        errors.append(f"{label}を入力してください。"); return None
+    if not text.isdecimal():
+        errors.append(f"{label}は{minimum}以上{maximum}以下の整数で入力してください。"); return None
+    number=int(text)
+    if not minimum<=number<=maximum:
+        errors.append(f"{label}は{minimum}以上{maximum}以下で入力してください。"); return None
+    return number
+
+def _rows(lengths:list[str],quantities:list[str],label:str,errors:list[str])->list[dict[str,int]]:
+    rows=[]
+    for index in range(max(len(lengths),len(quantities))):
+        length=lengths[index] if index<len(lengths) else ""; quantity=quantities[index] if index<len(quantities) else ""
+        if not length.strip() and not quantity.strip(): continue
+        if not length.strip() or not quantity.strip():
+            errors.append(f"{label}{index+1}行目は寸法と本数の両方を入力してください。"); continue
+        size=_integer(length,f"{label}{index+1}行目の寸法",1,1_000_000,errors)
+        count=_integer(quantity,f"{label}{index+1}行目の本数",1,100_000,errors)
+        if size is not None and count is not None: rows.append({"length_mm":size,"quantity":count})
+    return rows
+
+@app.post("/",response_class=HTMLResponse)
+async def calculate_from_form(request:Request)->HTMLResponse:
+    raw=await request.form()
+    form:dict[str,Any]={"mode":str(raw.get("mode","required_stock")),"title":str(raw.get("title","")),"material_type":str(raw.get("material_type","")),"author":str(raw.get("author","")),"notes":str(raw.get("notes","")),"new_stock_length_mm":str(raw.get("new_stock_length_mm","")),"kerf_mm":str(raw.get("kerf_mm","")),"left_trim_mm":str(raw.get("left_trim_mm","")),"new_stock_quantity":str(raw.get("new_stock_quantity","0")),"part_lengths":[str(x) for x in raw.getlist("part_length")],"part_quantities":[str(x) for x in raw.getlist("part_quantity")],"remnant_lengths":[str(x) for x in raw.getlist("remnant_length")],"remnant_quantities":[str(x) for x in raw.getlist("remnant_quantity")]}
+    errors=[]; mode=form["mode"]
+    if mode not in {"required_stock","inventory"}: errors.append("計算モードを選択してください。")
+    stock=_integer(form["new_stock_length_mm"],"新品母材長",1,1_000_000,errors)
+    kerf=_integer(form["kerf_mm"],"鋸刃厚",0,10_000,errors)
+    trim=_integer(form["left_trim_mm"],"左端捨て切り寸法",0,10_000,errors)
+    parts=_rows(form["part_lengths"],form["part_quantities"],"必要部材",errors)
+    if not parts: errors.append("必要部材を最低1行入力してください。")
+    inventory=None
+    if mode=="inventory":
+        held=_integer(form["new_stock_quantity"],"保有新品母材本数",0,100_000,errors)
+        remnants=_rows(form["remnant_lengths"],form["remnant_quantities"],"既存残材",errors)
+        if held is not None: inventory={"new_stock_quantity":held,"remnants":remnants}
+    result=None
+    if not errors and None not in (stock,kerf,trim):
+        payload={"mode":mode,"cutting_conditions":{"new_stock_length_mm":stock,"kerf_mm":kerf,"left_trim_mm":trim},"required_parts":parts}
+        if mode=="inventory": payload["inventory"]=inventory
+        try: result=calculate(CalculationInput.model_validate(payload))
+        except ValidationError: errors.append("入力件数または合計本数が上限を超えています。入力を確認してください。")
+        except ValueError as exc: errors.append(str(exc))
+        except Exception: errors.append("計算中に予期しないエラーが発生しました。入力を確認して再度お試しください。")
+    return templates.TemplateResponse(request=request,name="index.html",context={"form":form,"errors":errors,"result":result})
 
 
 @app.get("/health")

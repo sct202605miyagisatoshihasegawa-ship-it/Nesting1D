@@ -44,6 +44,7 @@ def read_root(request: Request) -> HTMLResponse:
             "errors": [],
             "result": None,
             "view": None,
+            "calculated_at": None,
             "records": storage.list_records(),
         },
     )
@@ -137,11 +138,13 @@ async def calculate_from_form(request:Request)->HTMLResponse:
         if held is not None: inventory={"new_stock_quantity":held,"remnants":remnants}
     result=None
     view=None
+    calculated_at=None
     if not errors and None not in (stock,kerf,trim):
         payload={"mode":mode,"cutting_conditions":{"new_stock_length_mm":stock,"kerf_mm":kerf,"left_trim_mm":trim},"required_parts":parts}
         if mode=="inventory": payload["inventory"]=inventory
         try:
             result=calculate(CalculationInput.model_validate(payload)); view=_display_result(result,form)
+            calculated_at=tokyo_now().strftime("%Y-%m-%d %H:%M:%S")
         except ValidationError: errors.append("入力件数または合計本数が上限を超えています。入力を確認してください。")
         except ValueError as exc: errors.append(str(exc))
         except Exception: errors.append("計算中に予期しないエラーが発生しました。入力を確認して再度お試しください。")
@@ -153,6 +156,7 @@ async def calculate_from_form(request:Request)->HTMLResponse:
             "errors": errors,
             "result": result,
             "view": view,
+            "calculated_at": calculated_at,
             "records": storage.list_records(),
         },
     )

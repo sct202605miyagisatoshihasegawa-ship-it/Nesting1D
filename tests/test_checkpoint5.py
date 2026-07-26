@@ -236,6 +236,22 @@ def test_javascript_and_css_checkpoint5_contracts():
     for existing in ("[data-add]", ".remove", "updateMode"):
         assert existing in javascript
     assert "@media (max-width: 600px)" in css and ".file-toolbar" in css
+    assert "calculation-management-number" in template and "displayCalculationIdentity" in javascript
+
+
+def test_successful_calculation_scroll_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    css = Path("app/static/css/style.css").read_text(encoding="utf-8")
+    submit_start = javascript.index('form.addEventListener("submit"')
+    submit_end = javascript.index("});", submit_start) + 3
+    submit_handler = javascript[submit_start:submit_end]
+    assert "sessionStorage.setItem(calculationScrollKey" in submit_handler
+    assert "sessionStorage.removeItem(calculationScrollKey)" in javascript
+    assert "if (resultTabs)" in javascript
+    assert "if (shouldScrollToResults)" in javascript
+    assert javascript.index('showResultView("dashboard-view")') < javascript.index("scrollIntoView")
+    assert 'scrollIntoView({behavior: "smooth", block: "start"})' in javascript
+    assert "scroll-margin-top:16px" in css
 
 
 def test_calculation_submit_suppresses_only_intended_unload():

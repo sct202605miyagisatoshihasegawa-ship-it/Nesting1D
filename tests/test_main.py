@@ -11,7 +11,8 @@ def test_root_page() -> None:
 
     assert response.status_code == 200
     assert "Nesting1D" in response.text
-    assert "正常に稼働しています" in response.text
+    assert "計算結果識別情報" in response.text
+    assert "未発行" in response.text and "未計算" in response.text
 
 
 def test_health_check() -> None:

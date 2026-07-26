@@ -7,12 +7,26 @@ def normal(**updates):
     data={"mode":"required_stock","title":"案件<script>","material_type":"角材","author":"担当者","notes":"備考","new_stock_length_mm":"1030","kerf_mm":"5","left_trim_mm":"10","new_stock_quantity":"0","part_length":"500","part_quantity":"2","remnant_length":"","remnant_quantity":""}
     data.update(updates); return data
 
-def test_get_form_and_existing_status():
+def test_get_form_and_calculation_identity():
     response=client.get("/")
     assert response.status_code==200
-    assert "正常に稼働しています" in response.text
+    assert "開発環境" not in response.text
+    assert "計算結果識別情報" in response.text
+    assert "未発行" in response.text and "未計算" in response.text
     assert "必要母材算出" in response.text
     assert "在庫母材・残材活用" in response.text
+
+
+def test_calculation_identity_and_fixed_rules():
+    response=client.post("/",data=normal(mode="inventory"))
+    assert response.status_code==200
+    assert "未計算" not in response.text
+    assert "計算日時" in response.text and "在庫母材・残材活用" in response.text
+    for text in ("固定ルール（編集不可）", "右端捨て切り", "なし", "残材50mm以下", "廃棄", "左から順に切断"):
+        assert text in response.text
+    assert response.text.count('name="new_stock_length_mm"') == 1
+    assert response.text.count('name="kerf_mm"') == 1
+    assert response.text.count('name="left_trim_mm"') == 1
 
 def test_required_stock_calculation_and_escape():
     response=client.post("/",data=normal())
@@ -46,7 +60,7 @@ def test_invalid_integer_and_range_errors():
     for value in ("0","-1","1.5","abc","1000001"):
         response=client.post("/",data=normal(new_stock_length_mm=value))
         assert "新品母材長は" in response.text
-        assert "計算結果" not in response.text
+        assert "計算結果ダッシュボード" not in response.text
 
 def test_impossible_part_is_user_error():
     response=client.post("/",data=normal(new_stock_length_mm="100",part_length="100",part_quantity="1"))

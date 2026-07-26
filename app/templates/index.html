@@ -16,30 +16,25 @@
 
 <body>
     <main class="container">
-        <header class="page-header">
-            <p class="eyebrow">1D CUTTING OPTIMIZER</p>
-            <h1>Nesting1D</h1>
+        <div class="hero-grid">
+            <header class="page-header">
+                <p class="eyebrow">1D CUTTING OPTIMIZER</p>
+                <h1>Nesting1D</h1>
 
-            <p class="description">
-                一次元ネスティング計算アプリ
-            </p>
-        </header>
+                <p class="description">
+                    一次元ネスティング計算アプリ
+                </p>
+            </header>
 
-        <section class="status-card">
-            <h2>開発環境</h2>
-
-            <dl>
-                <div>
-                    <dt>Webサーバー</dt>
-                    <dd>FastAPI / Uvicorn</dd>
-                </div>
-
-                <div>
-                    <dt>状態</dt>
-                    <dd class="status-ok">正常に稼働しています</dd>
-                </div>
-            </dl>
-        </section>
+            <section class="identity-card" aria-labelledby="identity-heading">
+                <h2 id="identity-heading">計算結果識別情報</h2>
+                <dl>
+                    <div><dt>管理番号</dt><dd id="calculation-management-number">未発行</dd></div>
+                    <div><dt>計算日時</dt><dd id="calculation-datetime">{{ calculated_at or "未計算" }}</dd></div>
+                    <div><dt>計算モード</dt><dd id="calculation-mode">{{ "在庫母材・残材活用" if form.mode == "inventory" else "必要母材算出" }}</dd></div>
+                </dl>
+            </section>
+        </div>
         <section class="card file-toolbar" aria-label="保存と読込">
             <div><strong>管理番号：</strong><span id="management-number">未発行</span></div>
             <div><strong>保存状態：</strong><span id="save-status" class="unsaved">未保存</span></div>
@@ -77,11 +72,20 @@
                 <label>データ製作者<input name="author" value="{{ form.author }}"></label>
                 <label class="wide">備考<textarea name="notes">{{ form.notes }}</textarea></label>
             </div></section>
-            <section class="card"><h2>切断条件</h2><div class="grid three">
+            <section class="card cutting-conditions"><h2>切断条件</h2><div class="grid three">
                 <label>新品母材長（mm）<input name="new_stock_length_mm" inputmode="numeric" value="{{ form.new_stock_length_mm }}" required></label>
                 <label>鋸刃厚（mm）<input name="kerf_mm" inputmode="numeric" value="{{ form.kerf_mm }}" required></label>
                 <label>左端捨て切り（mm）<input name="left_trim_mm" inputmode="numeric" value="{{ form.left_trim_mm }}" required></label>
-            </div></section>
+            </div>
+                <aside class="fixed-rules" aria-labelledby="fixed-rules-heading">
+                    <h3 id="fixed-rules-heading">固定ルール（編集不可）</h3>
+                    <dl>
+                        <div><dt>右端捨て切り</dt><dd>なし</dd></div>
+                        <div><dt>残材50mm以下</dt><dd>廃棄</dd></div>
+                        <div><dt>切断方向</dt><dd>左から順に切断</dd></div>
+                    </dl>
+                </aside>
+            </section>
             <section class="card"><div class="section-head"><h2>必要部材</h2><button type="button" class="secondary" data-add="part-rows">行追加</button></div>
                 <div id="part-rows" class="rows">
                 {% for length in form.part_lengths %}<div class="input-row">

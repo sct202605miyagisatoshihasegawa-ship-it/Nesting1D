@@ -1,9 +1,20 @@
 const inventoryFields = document.querySelector(".inventory-fields");
 const form = document.querySelector("#calculation-form");
+const calculationScrollKey = "nesting1d-scroll-to-results";
 
 function updateMode() {
     const selected = document.querySelector('input[name="mode"]:checked');
     inventoryFields.hidden = !selected || selected.value !== "inventory";
+    document.querySelector("#calculation-mode").textContent =
+        selected?.value === "inventory" ? "在庫母材・残材活用" : "必要母材算出";
+}
+
+function displayCalculationIdentity(number = "", timestamp = "") {
+    document.querySelector("#calculation-management-number").textContent = number || "未発行";
+    if (timestamp) {
+        document.querySelector("#calculation-datetime").textContent =
+            new Intl.DateTimeFormat("ja-JP", {dateStyle: "medium", timeStyle: "medium"}).format(new Date(timestamp));
+    }
 }
 
 document.querySelectorAll('input[name="mode"]').forEach((input) => {
@@ -33,17 +44,23 @@ form.addEventListener("submit", (event) => {
     }
     calculationSubmitting = true;
     suppressBeforeUnload = true;
+    sessionStorage.setItem(calculationScrollKey, "1");
     const button = form.querySelector(".calculate-button");
     button.disabled = true;
     document.querySelector("#processing").hidden = false;
     setTimeout(() => {
-        if (event.defaultPrevented) resetCalculationSubmission();
+        if (event.defaultPrevented) {
+            sessionStorage.removeItem(calculationScrollKey);
+            resetCalculationSubmission();
+        }
     }, 0);
 });
 
 updateMode();
 
 const resultTabs = document.querySelector(".result-tabs");
+const shouldScrollToResults = sessionStorage.getItem(calculationScrollKey) === "1";
+sessionStorage.removeItem(calculationScrollKey);
 if (resultTabs) {
     const panels = document.querySelectorAll(".result-panel");
     function showResultView(targetId) {
@@ -62,6 +79,12 @@ if (resultTabs) {
         if (button) showResultView(button.dataset.resultView);
     });
     showResultView("dashboard-view");
+    if (shouldScrollToResults) {
+        window.addEventListener("pageshow", () => {
+            showResultView("dashboard-view");
+            resultTabs.scrollIntoView({behavior: "smooth", block: "start"});
+        }, {once: true});
+    }
 }
 
 const saveButton = document.querySelector("#save-record");
@@ -128,6 +151,7 @@ async function saveRecord(overwrite = false) {
         if (!response.ok || !data.ok) throw new Error(data.message || "保存に失敗しました。");
         managementNumber = data.management_number;
         numberDisplay.textContent = managementNumber;
+        displayCalculationIdentity(managementNumber, data.updated_at);
         jsonButton.disabled = false;
         htmlButton.disabled = false;
         setDirty(false);
@@ -166,6 +190,7 @@ function populate(record) {
     replaceRows("remnant-rows", "remnant-row-template", input.inventory?.remnants || [], "remnant_length", "remnant_quantity");
     managementNumber = record.management_number;
     numberDisplay.textContent = managementNumber;
+    displayCalculationIdentity(managementNumber, record.updated_at);
     jsonButton.disabled = false;
     htmlButton.disabled = false;
     updateMode();

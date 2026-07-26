@@ -102,7 +102,6 @@ const saveButton = document.querySelector("#save-record");
 const loadButton = document.querySelector("#load-record");
 const jsonButton = document.querySelector("#download-json");
 const htmlButton = document.querySelector("#download-html");
-const newButton = document.querySelector("#new-record");
 const resetButton = document.querySelector("#reset-input");
 const recordSelect = document.querySelector("#record-select");
 const numberDisplay = document.querySelector("#management-number");
@@ -125,7 +124,8 @@ function resetCalculationSubmission() {
 
 function setDirty(value) {
     dirty = value;
-    statusDisplay.textContent = value ? "未保存" : "保存済み";
+    statusDisplay.textContent = value ? "● 未保存の変更があります" : "保存済み";
+    statusDisplay.hidden = false;
     statusDisplay.classList.toggle("unsaved", value);
     statusDisplay.classList.toggle("saved", !value);
 }
@@ -253,8 +253,10 @@ document.querySelector(".common-information").addEventListener("input", () => se
 document.querySelector(".common-information").addEventListener("change", () => setDirty(true));
 saveButton.addEventListener("click", () => saveRecord());
 loadButton.addEventListener("click", () => protectedAction(loadSelected));
-newButton.addEventListener("click", () => protectedAction(() => window.location.assign("/")));
-resetButton.addEventListener("click", () => protectedAction(() => { form.reset(); window.location.assign("/"); }));
+resetButton.addEventListener("click", () => protectedAction(() => {
+    setDirty(false);
+    window.location.assign("/");
+}));
 jsonButton.addEventListener("click", () => { if (managementNumber) window.location.assign(`/download/${managementNumber}.json`); });
 htmlButton.addEventListener("click", () => { if (managementNumber) window.location.assign(`/download/${managementNumber}.html`); });
 window.addEventListener("beforeunload", (event) => {

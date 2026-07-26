@@ -61,6 +61,26 @@ def test_corrected_tab_window_and_following_section_order():
     assert 'form="calculation-form" name="notes"' in html
 
 
+def test_stage5_management_actions_and_auxiliary_placement():
+    html = client.get("/").text
+    conditions_start = html.index('id="conditions-view"')
+    dashboard_start = html.index('id="dashboard-view"')
+    management_start = html.index('id="management-actions-heading"')
+    common_start = html.index('class="card common-information"')
+    conditions_panel = html[conditions_start:dashboard_start]
+    management_panel = html[management_start:common_start]
+    assert conditions_start < dashboard_start < management_start < common_start
+    assert '<summary>その他の操作</summary>' in conditions_panel
+    for control_id in ("record-select", "load-record", "download-json", "download-html"):
+        assert f'id="{control_id}"' in conditions_panel
+        assert f'id="{control_id}"' not in management_panel
+    assert management_panel.count("<button") == 2
+    assert 'id="save-record">保存</button>' in management_panel
+    assert 'id="reset-input">リセット</button>' in management_panel
+    assert "新規作成" not in management_panel
+    assert 'id="save-status" class="saved">保存済み</span>' in management_panel
+
+
 def test_success_selects_dashboard_and_snapshot_totals_are_stable():
     response=client.post("/",data=normal(new_stock_length_mm="2000",part_length=["500","200","500"],part_quantity=["2","3","1"]))
     assert response.status_code==200

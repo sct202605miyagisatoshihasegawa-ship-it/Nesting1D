@@ -102,6 +102,20 @@
                 <h3>寸法ごとの必要本数</h3>
                 <div class="snapshot-parts">{% for part in input_snapshot.parts_by_length %}<span>{{ part.length_mm }}mm × {{ part.quantity }}本</span>{% endfor %}</div>
             </div>{% else %}<p class="empty-result">計算後に入力条件を表示します。</p>{% endif %}
+            <details class="other-actions">
+                <summary>その他の操作</summary>
+                <div class="other-actions-content">
+                    <label>保存済みJSONを読込
+                        <select id="record-select">
+                            <option value="">選択してください</option>
+                            {% for number in records %}<option value="{{ number }}">{{ number }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <button type="button" id="load-record">JSON読込</button>
+                    <button type="button" id="download-json" disabled>JSONをダウンロード</button>
+                    <button type="button" id="download-html" disabled>HTMLをダウンロード</button>
+                </div>
+            </details>
         </section>
         {% if result %}
         <section id="dashboard-view" class="card result-panel" aria-live="polite">
@@ -190,23 +204,15 @@
         {% endif %}
         </div>
         <section class="card file-toolbar" aria-labelledby="management-actions-heading">
-            <h2 id="management-actions-heading" class="wide">管理・アクション</h2>
+            <div class="management-heading">
+                <h2 id="management-actions-heading">管理・アクション</h2>
+                <span id="save-status" class="saved">保存済み</span>
+            </div>
             <div><strong>管理番号：</strong><span id="management-number">未発行</span></div>
-            <div><strong>保存状態：</strong><span id="save-status" class="unsaved">未保存</span></div>
             <div class="file-actions">
                 <button type="button" id="save-record">保存</button>
-                <button type="button" id="download-json" disabled>JSONをダウンロード</button>
-                <button type="button" id="download-html" disabled>HTMLをダウンロード</button>
-                <button type="button" id="new-record">新規作成</button>
-                <button type="button" id="reset-input">入力リセット</button>
+                <button type="button" id="reset-input">リセット</button>
             </div>
-            <label>保存済みJSONを読込
-                <select id="record-select">
-                    <option value="">選択してください</option>
-                    {% for number in records %}<option value="{{ number }}">{{ number }}</option>{% endfor %}
-                </select>
-            </label>
-            <button type="button" id="load-record">JSON読込</button>
             <p id="file-message" role="alert"></p>
         </section>
             <section class="card common-information"><h2>共通情報</h2><div class="grid">

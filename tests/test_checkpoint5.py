@@ -257,6 +257,26 @@ def test_five_tabs_and_initial_selection_contract():
         assert f'id="{panel_id}"' in template
 
 
+def test_stage5_dirty_save_load_and_reset_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    template = Path("app/templates/index.html").read_text(encoding="utf-8")
+    assert "● 未保存の変更があります" in javascript
+    assert javascript.count("let dirty =") == 1
+    save_start = javascript.index("async function saveRecord")
+    save_end = javascript.index("function replaceRows", save_start)
+    assert "setDirty(false)" in javascript[save_start:save_end]
+    populate_start = javascript.index("function populate")
+    populate_end = javascript.index("async function loadSelected", populate_start)
+    assert "setDirty(false)" in javascript[populate_start:populate_end]
+    assert 'resetButton.addEventListener("click", () => protectedAction' in javascript
+    assert 'choice === "cancel"' in javascript
+    assert 'window.location.assign("/")' in javascript
+    assert 'const newButton' not in javascript and 'id="new-record"' not in template
+    assert '<details class="other-actions">' in template
+    for control_id in ("load-record", "download-json", "download-html"):
+        assert f'id="{control_id}"' in template
+
+
 def test_inventory_mode_reorders_only_input_sections():
     javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
     assert 'const requiredPartsFields = document.querySelector("#part-rows").closest(".card")' in javascript

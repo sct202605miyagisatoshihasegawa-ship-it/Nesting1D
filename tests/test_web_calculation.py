@@ -1,3 +1,5 @@
+import re
+
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -55,6 +57,44 @@ def test_partial_part_row_is_error_and_value_is_kept():
 def test_no_part_row_is_error():
     response=client.post("/",data=normal(part_length="",part_quantity=""))
     assert "必要部材を最低1行" in response.text
+    assert "寸法を入力してください。" in response.text
+    assert "必要本数を入力してください。" in response.text
+    assert 'id="error-part-length-0"' in response.text
+    assert 'id="error-part-quantity-0"' in response.text
+
+
+def test_inline_errors_mark_only_invalid_fields_and_keep_row_indexes():
+    response=client.post("/",data=normal(part_length=["500","abc"],part_quantity=["2","0"]))
+    assert response.status_code==200
+    valid_input=re.search(r'<input name="part_length"[^>]*value="500"[^>]*>',response.text).group()
+    invalid_length=re.search(r'<input name="part_length"[^>]*value="abc"[^>]*>',response.text).group()
+    invalid_quantity=re.search(r'<input name="part_quantity"[^>]*value="0"[^>]*>',response.text).group()
+    assert "field-error-input" not in valid_input
+    assert 'class="field-error-input"' in invalid_length and 'aria-invalid="true"' in invalid_length
+    assert 'class="field-error-input"' in invalid_quantity
+    assert 'id="error-part-length-1"' in response.text
+    assert 'id="error-part-quantity-1"' in response.text
+    assert "1以上1000000以下の整数を入力してください。" in response.text
+    assert "1以上100000以下の整数を入力してください。" in response.text
+    assert "計算結果ダッシュボード" not in response.text
+
+
+def test_impossible_part_has_inline_error_using_engine_length_rule():
+    response=client.post("/",data=normal(new_stock_length_mm="119",kerf_mm="5",left_trim_mm="10",part_length="100",part_quantity="1"))
+    part_input=re.search(r'<input name="part_length"[^>]*value="100"[^>]*>',response.text).group()
+    assert "field-error-input" in part_input
+    assert "捨て切りと鋸刃厚を含めて新品母材から切り出せる寸法を入力してください。" in response.text
+    assert "新品母材から切り出せない部材があります。" in response.text
+    assert "計算結果ダッシュボード" not in response.text
+
+
+def test_inventory_inline_errors_stay_with_their_fields():
+    response=client.post("/",data=normal(mode="inventory",new_stock_quantity="bad",remnant_length=["600","700"],remnant_quantity=["1",""]))
+    assert 'id="error-new-stock-quantity"' in response.text
+    assert "0以上100000以下の整数を入力してください。" in response.text
+    assert 'id="error-remnant-quantity-1"' in response.text
+    assert "保有本数を入力してください。" in response.text
+    assert 'id="error-remnant-quantity-0"' not in response.text
 
 def test_invalid_integer_and_range_errors():
     for value in ("0","-1","1.5","abc","1000001"):

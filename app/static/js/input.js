@@ -59,6 +59,7 @@ form.addEventListener("submit", (event) => {
 updateMode();
 
 const resultTabs = document.querySelector(".result-tabs");
+const firstFieldError = document.querySelector(".field-error-input");
 const shouldScrollToResults = sessionStorage.getItem(calculationScrollKey) === "1";
 sessionStorage.removeItem(calculationScrollKey);
 if (resultTabs) {
@@ -85,6 +86,12 @@ if (resultTabs) {
             resultTabs.scrollIntoView({behavior: "smooth", block: "start"});
         }, {once: true});
     }
+}
+if (firstFieldError) {
+    window.addEventListener("pageshow", () => {
+        firstFieldError.focus({preventScroll: true});
+        firstFieldError.scrollIntoView({behavior: "smooth", block: "center"});
+    }, {once: true});
 }
 
 const saveButton = document.querySelector("#save-record");
@@ -227,7 +234,16 @@ unsavedDialog.addEventListener("click", async (event) => {
     if (action) action();
 });
 
-form.addEventListener("input", () => setDirty(true));
+form.addEventListener("input", (event) => {
+    setDirty(true);
+    const input = event.target.closest(".field-error-input");
+    if (!input) return;
+    const messageId = input.getAttribute("aria-describedby");
+    input.classList.remove("field-error-input");
+    input.removeAttribute("aria-invalid");
+    input.removeAttribute("aria-describedby");
+    if (messageId) document.querySelector(`#${messageId}`)?.remove();
+});
 form.addEventListener("change", () => setDirty(true));
 saveButton.addEventListener("click", () => saveRecord());
 loadButton.addEventListener("click", () => protectedAction(loadSelected));

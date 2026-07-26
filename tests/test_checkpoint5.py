@@ -254,6 +254,20 @@ def test_successful_calculation_scroll_contract():
     assert "scroll-margin-top:16px" in css
 
 
+def test_inline_error_scroll_and_clear_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    css = Path("app/static/css/style.css").read_text(encoding="utf-8")
+    template = Path("app/templates/index.html").read_text(encoding="utf-8")
+    assert 'document.querySelector(".field-error-input")' in javascript
+    assert 'firstFieldError.focus({preventScroll: true})' in javascript
+    assert 'firstFieldError.scrollIntoView({behavior: "smooth", block: "center"})' in javascript
+    assert 'input.classList.remove("field-error-input")' in javascript
+    assert 'input.removeAttribute("aria-invalid")' in javascript
+    assert 'document.querySelector(`#${messageId}`)?.remove()' in javascript
+    assert "label .field-error-input" in css and ".field-error-message" in css
+    assert 'aria-invalid="true"' in template and "field_errors" in template
+
+
 def test_calculation_submit_suppresses_only_intended_unload():
     javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
     submit_start = javascript.index('form.addEventListener("submit"')

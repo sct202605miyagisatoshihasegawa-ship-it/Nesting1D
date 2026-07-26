@@ -42,6 +42,7 @@ def read_root(request: Request) -> HTMLResponse:
         context={
             "form": DEFAULT_FORM,
             "errors": [],
+            "field_errors": {},
             "result": None,
             "view": None,
             "calculated_at": None,
@@ -50,26 +51,40 @@ def read_root(request: Request) -> HTMLResponse:
     )
 
 
-def _integer(value:str,label:str,minimum:int,maximum:int,errors:list[str])->int|None:
+def _add_field_error(field_errors:dict[str,list[str]],key:str,message:str)->None:
+    field_errors.setdefault(key,[]).append(message)
+
+def _integer(value:str,label:str,minimum:int,maximum:int,errors:list[str],field_errors:dict[str,list[str]]|None=None,field_key:str|None=None,inline_label:str|None=None)->int|None:
     text=value.strip()
     if not text:
-        errors.append(f"{label}を入力してください。"); return None
+        errors.append(f"{label}を入力してください。")
+        if field_errors is not None and field_key:
+            _add_field_error(field_errors,field_key,f"{inline_label or label}を入力してください。")
+        return None
     if not text.isdecimal():
-        errors.append(f"{label}は{minimum}以上{maximum}以下の整数で入力してください。"); return None
+        errors.append(f"{label}は{minimum}以上{maximum}以下の整数で入力してください。")
+        if field_errors is not None and field_key:
+            _add_field_error(field_errors,field_key,f"{minimum}以上{maximum}以下の整数を入力してください。")
+        return None
     number=int(text)
     if not minimum<=number<=maximum:
-        errors.append(f"{label}は{minimum}以上{maximum}以下で入力してください。"); return None
+        errors.append(f"{label}は{minimum}以上{maximum}以下で入力してください。")
+        if field_errors is not None and field_key:
+            _add_field_error(field_errors,field_key,f"{minimum}以上{maximum}以下の整数を入力してください。")
+        return None
     return number
 
-def _rows(lengths:list[str],quantities:list[str],label:str,errors:list[str])->list[dict[str,int]]:
+def _rows(lengths:list[str],quantities:list[str],label:str,errors:list[str],field_errors:dict[str,list[str]],length_key:str,quantity_key:str,length_label:str,quantity_label:str)->list[dict[str,int]]:
     rows=[]
     for index in range(max(len(lengths),len(quantities))):
         length=lengths[index] if index<len(lengths) else ""; quantity=quantities[index] if index<len(quantities) else ""
         if not length.strip() and not quantity.strip(): continue
         if not length.strip() or not quantity.strip():
-            errors.append(f"{label}{index+1}行目は寸法と本数の両方を入力してください。"); continue
-        size=_integer(length,f"{label}{index+1}行目の寸法",1,1_000_000,errors)
-        count=_integer(quantity,f"{label}{index+1}行目の本数",1,100_000,errors)
+            errors.append(f"{label}{index+1}行目は寸法と本数の両方を入力してください。")
+            if not length.strip(): _add_field_error(field_errors,f"{length_key}_{index}",f"{length_label}を入力してください。")
+            if not quantity.strip(): _add_field_error(field_errors,f"{quantity_key}_{index}",f"{quantity_label}を入力してください。")
+        size=None if not length.strip() else _integer(length,f"{label}{index+1}行目の寸法",1,1_000_000,errors,field_errors,f"{length_key}_{index}",length_label)
+        count=None if not quantity.strip() else _integer(quantity,f"{label}{index+1}行目の本数",1,100_000,errors,field_errors,f"{quantity_key}_{index}",quantity_label)
         if size is not None and count is not None: rows.append({"length_mm":size,"quantity":count})
     return rows
 
@@ -124,18 +139,28 @@ def _display_result(result,form:dict)->dict:
 async def calculate_from_form(request:Request)->HTMLResponse:
     raw=await request.form()
     form:dict[str,Any]={"mode":str(raw.get("mode","required_stock")),"title":str(raw.get("title","")),"material_type":str(raw.get("material_type","")),"author":str(raw.get("author","")),"notes":str(raw.get("notes","")),"new_stock_length_mm":str(raw.get("new_stock_length_mm","")),"kerf_mm":str(raw.get("kerf_mm","")),"left_trim_mm":str(raw.get("left_trim_mm","")),"new_stock_quantity":str(raw.get("new_stock_quantity","0")),"part_lengths":[str(x) for x in raw.getlist("part_length")],"part_quantities":[str(x) for x in raw.getlist("part_quantity")],"remnant_lengths":[str(x) for x in raw.getlist("remnant_length")],"remnant_quantities":[str(x) for x in raw.getlist("remnant_quantity")]}
-    errors=[]; mode=form["mode"]
+    errors=[]; field_errors:dict[str,list[str]]={}; mode=form["mode"]
     if mode not in {"required_stock","inventory"}: errors.append("計算モードを選択してください。")
-    stock=_integer(form["new_stock_length_mm"],"新品母材長",1,1_000_000,errors)
-    kerf=_integer(form["kerf_mm"],"鋸刃厚",0,10_000,errors)
-    trim=_integer(form["left_trim_mm"],"左端捨て切り寸法",0,10_000,errors)
-    parts=_rows(form["part_lengths"],form["part_quantities"],"必要部材",errors)
-    if not parts: errors.append("必要部材を最低1行入力してください。")
+    stock=_integer(form["new_stock_length_mm"],"新品母材長",1,1_000_000,errors,field_errors,"new_stock_length_mm","新品母材長")
+    kerf=_integer(form["kerf_mm"],"鋸刃厚",0,10_000,errors,field_errors,"kerf_mm","鋸刃厚")
+    trim=_integer(form["left_trim_mm"],"左端捨て切り寸法",0,10_000,errors,field_errors,"left_trim_mm","左端捨て切り寸法")
+    parts=_rows(form["part_lengths"],form["part_quantities"],"必要部材",errors,field_errors,"part_length","part_quantity","寸法","必要本数")
+    if not parts:
+        errors.append("必要部材を最低1行入力してください。")
+        if form["part_lengths"] and not form["part_lengths"][0].strip(): _add_field_error(field_errors,"part_length_0","寸法を入力してください。")
+        if form["part_quantities"] and not form["part_quantities"][0].strip(): _add_field_error(field_errors,"part_quantity_0","必要本数を入力してください。")
     inventory=None
     if mode=="inventory":
-        held=_integer(form["new_stock_quantity"],"保有新品母材本数",0,100_000,errors)
-        remnants=_rows(form["remnant_lengths"],form["remnant_quantities"],"既存残材",errors)
+        held=_integer(form["new_stock_quantity"],"保有新品母材本数",0,100_000,errors,field_errors,"new_stock_quantity","在庫本数")
+        remnants=_rows(form["remnant_lengths"],form["remnant_quantities"],"既存残材",errors,field_errors,"remnant_length","remnant_quantity","残材寸法","保有本数")
         if held is not None: inventory={"new_stock_quantity":held,"remnants":remnants}
+    if None not in (stock,kerf,trim):
+        impossible=[]
+        for index,value in enumerate(form["part_lengths"]):
+            if value.strip().isdecimal() and 1<=int(value)<=1_000_000 and trim+kerf+int(value)+kerf>stock:
+                impossible.append(index)
+                _add_field_error(field_errors,f"part_length_{index}","捨て切りと鋸刃厚を含めて新品母材から切り出せる寸法を入力してください。")
+        if impossible: errors.append("新品母材から切り出せない部材があります。")
     result=None
     view=None
     calculated_at=None
@@ -154,6 +179,7 @@ async def calculate_from_form(request:Request)->HTMLResponse:
         context={
             "form": form,
             "errors": errors,
+            "field_errors": field_errors,
             "result": result,
             "view": view,
             "calculated_at": calculated_at,

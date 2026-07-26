@@ -249,6 +249,21 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-vis
 .field-mode{border-color:var(--color-accent)}.field-note{border-left-color:var(--color-accent);background:#10271d}
 .unsaved,#file-message{color:var(--color-warning)}
 dialog{border-color:var(--color-border);color:var(--color-text);background:var(--color-card);box-shadow:var(--shadow-card)}
+label .field-error-input {
+    border-color: var(--color-danger);
+    box-shadow: 0 0 0 1px rgb(216 109 116 / 35%);
+    scroll-margin-top: 24px;
+}
+label .field-error-input:focus-visible {
+    outline-color: var(--color-danger);
+    box-shadow: 0 0 0 3px rgb(216 109 116 / 24%);
+}
+.field-error-message {
+    color: #ff9aa1;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
 @media (max-width: 600px) {
     .file-toolbar { grid-template-columns: 1fr; }
     .file-actions { display: grid; grid-template-columns: 1fr; }

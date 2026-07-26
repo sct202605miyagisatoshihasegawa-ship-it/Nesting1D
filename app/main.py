@@ -45,6 +45,7 @@ def read_root(request: Request) -> HTMLResponse:
             "field_errors": {},
             "result": None,
             "view": None,
+            "input_snapshot": None,
             "calculated_at": None,
             "records": storage.list_records(),
         },
@@ -87,6 +88,21 @@ def _rows(lengths:list[str],quantities:list[str],label:str,errors:list[str],fiel
         count=None if not quantity.strip() else _integer(quantity,f"{label}{index+1}行目の本数",1,100_000,errors,field_errors,f"{quantity_key}_{index}",quantity_label)
         if size is not None and count is not None: rows.append({"length_mm":size,"quantity":count})
     return rows
+
+def _input_snapshot(mode:str,stock:int,kerf:int,trim:int,parts:list[dict[str,int]])->dict:
+    quantities:dict[int,int]={}
+    for part in parts:
+        quantities[part["length_mm"]]=quantities.get(part["length_mm"],0)+part["quantity"]
+    return {
+        "mode_label":"在庫母材・残材活用" if mode=="inventory" else "必要母材算出",
+        "new_stock_length_mm":stock,
+        "kerf_mm":kerf,
+        "left_trim_mm":trim,
+        "part_type_count":len(parts),
+        "part_total_quantity":sum(part["quantity"] for part in parts),
+        "part_total_length_mm":sum(part["length_mm"]*part["quantity"] for part in parts),
+        "parts_by_length":[{"length_mm":length,"quantity":quantity} for length,quantity in sorted(quantities.items(),reverse=True)],
+    }
 
 def _display_result(result,form:dict)->dict:
     source_labels={
@@ -163,12 +179,14 @@ async def calculate_from_form(request:Request)->HTMLResponse:
         if impossible: errors.append("新品母材から切り出せない部材があります。")
     result=None
     view=None
+    input_snapshot=None
     calculated_at=None
     if not errors and None not in (stock,kerf,trim):
         payload={"mode":mode,"cutting_conditions":{"new_stock_length_mm":stock,"kerf_mm":kerf,"left_trim_mm":trim},"required_parts":parts}
         if mode=="inventory": payload["inventory"]=inventory
         try:
             result=calculate(CalculationInput.model_validate(payload)); view=_display_result(result,form)
+            input_snapshot=_input_snapshot(mode,stock,kerf,trim,parts)
             calculated_at=tokyo_now().strftime("%Y-%m-%d %H:%M:%S")
         except ValidationError: errors.append("入力件数または合計本数が上限を超えています。入力を確認してください。")
         except ValueError as exc: errors.append(str(exc))
@@ -182,6 +200,7 @@ async def calculate_from_form(request:Request)->HTMLResponse:
             "field_errors": field_errors,
             "result": result,
             "view": view,
+            "input_snapshot": input_snapshot,
             "calculated_at": calculated_at,
             "records": storage.list_records(),
         },

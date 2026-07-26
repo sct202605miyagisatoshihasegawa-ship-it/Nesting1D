@@ -1,12 +1,16 @@
 const inventoryFields = document.querySelector(".inventory-fields");
 const form = document.querySelector("#calculation-form");
+const requiredPartsFields = document.querySelector("#part-rows").closest(".card");
+const calculateButton = form.querySelector(".calculate-button");
 const calculationScrollKey = "nesting1d-scroll-to-results";
 
 function updateMode() {
     const selected = document.querySelector('input[name="mode"]:checked');
-    inventoryFields.hidden = !selected || selected.value !== "inventory";
+    const inventoryMode = selected?.value === "inventory";
+    inventoryFields.hidden = !inventoryMode;
+    form.insertBefore(inventoryFields, inventoryMode ? requiredPartsFields : calculateButton);
     document.querySelector("#calculation-mode").textContent =
-        selected?.value === "inventory" ? "在庫母材・残材活用" : "必要母材算出";
+        inventoryMode ? "在庫母材・残材活用" : "必要母材算出";
 }
 
 function displayCalculationIdentity(number = "", timestamp = "") {
@@ -59,13 +63,13 @@ form.addEventListener("submit", (event) => {
 updateMode();
 
 const resultTabs = document.querySelector(".result-tabs");
+const hasResult = resultTabs?.dataset.hasResult === "true";
 const firstFieldError = document.querySelector(".field-error-input");
 const shouldScrollToResults = sessionStorage.getItem(calculationScrollKey) === "1";
 sessionStorage.removeItem(calculationScrollKey);
 if (resultTabs) {
     const panels = document.querySelectorAll(".result-panel");
     function showResultView(targetId) {
-        form.hidden = targetId !== "calculation-form";
         panels.forEach((panel) => {
             panel.hidden = panel.id !== targetId;
         });
@@ -79,8 +83,8 @@ if (resultTabs) {
         const button = event.target.closest("[data-result-view]");
         if (button) showResultView(button.dataset.resultView);
     });
-    showResultView("dashboard-view");
-    if (shouldScrollToResults) {
+    showResultView(hasResult ? "dashboard-view" : "conditions-view");
+    if (shouldScrollToResults && hasResult) {
         window.addEventListener("pageshow", () => {
             showResultView("dashboard-view");
             resultTabs.scrollIntoView({behavior: "smooth", block: "start"});
@@ -106,7 +110,7 @@ const statusDisplay = document.querySelector("#save-status");
 const messageDisplay = document.querySelector("#file-message");
 const unsavedDialog = document.querySelector("#unsaved-dialog");
 let managementNumber = "";
-let dirty = Boolean(resultTabs);
+let dirty = hasResult;
 let saving = false;
 let calculationSubmitting = false;
 let suppressBeforeUnload = false;
@@ -245,6 +249,8 @@ form.addEventListener("input", (event) => {
     if (messageId) document.querySelector(`#${messageId}`)?.remove();
 });
 form.addEventListener("change", () => setDirty(true));
+document.querySelector(".common-information").addEventListener("input", () => setDirty(true));
+document.querySelector(".common-information").addEventListener("change", () => setDirty(true));
 saveButton.addEventListener("click", () => saveRecord());
 loadButton.addEventListener("click", () => protectedAction(loadSelected));
 newButton.addEventListener("click", () => protectedAction(() => window.location.assign("/")));

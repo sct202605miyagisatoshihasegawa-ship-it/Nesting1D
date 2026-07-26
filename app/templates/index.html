@@ -35,43 +35,12 @@
                 </dl>
             </section>
         </div>
-        <section class="card file-toolbar" aria-label="保存と読込">
-            <div><strong>管理番号：</strong><span id="management-number">未発行</span></div>
-            <div><strong>保存状態：</strong><span id="save-status" class="unsaved">未保存</span></div>
-            <div class="file-actions">
-                <button type="button" id="save-record">保存</button>
-                <button type="button" id="download-json" disabled>JSONをダウンロード</button>
-                <button type="button" id="download-html" disabled>HTMLをダウンロード</button>
-                <button type="button" id="new-record">新規作成</button>
-                <button type="button" id="reset-input">入力リセット</button>
-            </div>
-            <label>保存済みJSONを読込
-                <select id="record-select">
-                    <option value="">選択してください</option>
-                    {% for number in records %}<option value="{{ number }}">{{ number }}</option>{% endfor %}
-                </select>
-            </label>
-            <button type="button" id="load-record">JSON読込</button>
-            <p id="file-message" role="alert"></p>
-        </section>
-        <dialog id="unsaved-dialog">
-            <p>未保存の変更があります。</p>
-            <button value="save">保存</button>
-            <button value="discard">破棄</button>
-            <button value="cancel">キャンセル</button>
-        </dialog>
         <form method="post" class="calculator" id="calculation-form" novalidate>
             <section class="card"><h2>計算モード</h2><div class="mode-options">
                 <label><input type="radio" name="mode" value="required_stock" {% if form.mode == 'required_stock' %}checked{% endif %}> 必要母材算出</label>
                 <label><input type="radio" name="mode" value="inventory" {% if form.mode == 'inventory' %}checked{% endif %}> 在庫母材・残材活用</label>
             </div></section>
             {% if errors %}<section class="error-box" role="alert"><h2>入力を確認してください</h2><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></section>{% endif %}
-            <section class="card"><h2>共通情報</h2><div class="grid">
-                <label>件名<input name="title" value="{{ form.title }}"></label>
-                <label>母材種類<input name="material_type" value="{{ form.material_type }}"></label>
-                <label>データ製作者<input name="author" value="{{ form.author }}"></label>
-                <label class="wide">備考<textarea name="notes">{{ form.notes }}</textarea></label>
-            </div></section>
             <section class="card cutting-conditions"><h2>切断条件</h2><div class="grid three">
                 <label>新品母材長（mm）<input name="new_stock_length_mm" inputmode="numeric" value="{{ form.new_stock_length_mm }}" required{% if field_errors.get("new_stock_length_mm") %} class="field-error-input" aria-invalid="true" aria-describedby="error-new-stock-length"{% endif %}>{% if field_errors.get("new_stock_length_mm") %}<span class="field-error-message" id="error-new-stock-length">{{ field_errors.new_stock_length_mm[0] }}</span>{% endif %}</label>
                 <label>鋸刃厚（mm）<input name="kerf_mm" inputmode="numeric" value="{{ form.kerf_mm }}" required{% if field_errors.get("kerf_mm") %} class="field-error-input" aria-invalid="true" aria-describedby="error-kerf"{% endif %}>{% if field_errors.get("kerf_mm") %}<span class="field-error-message" id="error-kerf">{{ field_errors.kerf_mm[0] }}</span>{% endif %}</label>
@@ -108,15 +77,33 @@
             </section>
             <button type="submit" class="calculate-button">計算する</button><p id="processing" hidden>計算中です…</p>
         </form>
-        {% if result %}
-        <nav class="result-tabs" aria-label="結果表示切替">
-            <button type="button" data-result-view="calculation-form">入力・計算条件</button>
-            <button type="button" data-result-view="dashboard-view" class="active">ダッシュボード</button>
+        <nav class="result-tabs" aria-label="表示切替" data-has-result="{{ 'true' if result else 'false' }}">
+            <button type="button" data-result-view="conditions-view"{% if not result %} class="active"{% endif %}>入力条件・計算条件</button>
+            <button type="button" data-result-view="dashboard-view"{% if result %} class="active"{% endif %}>ダッシュボード</button>
             <button type="button" data-result-view="patterns-view">パターン一覧</button>
             <button type="button" data-result-view="stocks-view">母材一覧</button>
             <button type="button" data-result-view="instructions-view">切断手順</button>
         </nav>
-
+        <div class="tab-content" aria-live="polite">
+        <section id="conditions-view" class="card result-panel"{% if result %} hidden{% endif %}>
+            <h2>入力条件・計算条件</h2>
+            {% if input_snapshot %}<div class="input-snapshot" aria-labelledby="input-snapshot-heading">
+                <div class="section-head"><h2 id="input-snapshot-heading">計算時の入力条件</h2><span class="snapshot-label">前回計算時点</span></div>
+                <div class="snapshot-grid">
+                    <dl><dt>計算モード</dt><dd>{{ input_snapshot.mode_label }}</dd></dl>
+                    <dl><dt>新品母材長</dt><dd>{{ input_snapshot.new_stock_length_mm }}mm</dd></dl>
+                    <dl><dt>鋸刃厚</dt><dd>{{ input_snapshot.kerf_mm }}mm</dd></dl>
+                    <dl><dt>左端捨て切り</dt><dd>{{ input_snapshot.left_trim_mm }}mm</dd></dl>
+                    <dl><dt>必要部材の種類数</dt><dd>{{ input_snapshot.part_type_count }}種類</dd></dl>
+                    <dl><dt>必要部材の合計本数</dt><dd>{{ input_snapshot.part_total_quantity }}本</dd></dl>
+                    <dl><dt>必要部材の合計長さ</dt><dd>{{ input_snapshot.part_total_length_mm }}mm</dd></dl>
+                </div>
+                <div class="snapshot-rules"><strong>固定ルール</strong><span>右端捨て切り：なし</span><span>残材50mm以下：廃棄</span><span>左から順に切断</span></div>
+                <h3>寸法ごとの必要本数</h3>
+                <div class="snapshot-parts">{% for part in input_snapshot.parts_by_length %}<span>{{ part.length_mm }}mm × {{ part.quantity }}本</span>{% endfor %}</div>
+            </div>{% else %}<p class="empty-result">計算後に入力条件を表示します。</p>{% endif %}
+        </section>
+        {% if result %}
         <section id="dashboard-view" class="card result-panel" aria-live="polite">
             <h2>計算結果ダッシュボード</h2>
             <div class="dashboard-grid">
@@ -195,7 +182,45 @@
             </ol>
             <p>パターン間を含む寸法変更：{{ result.dimension_change_count }}回 ／ 機械設定：{{ result.machine_setting_count }}回</p>
         </section>
+        {% else %}
+        <section id="dashboard-view" class="card result-panel empty-result" hidden><h2>ダッシュボード</h2><p>計算後に結果を表示します。</p></section>
+        <section id="patterns-view" class="card result-panel empty-result" hidden><h2>パターン一覧</h2><p>計算後に切断パターンを表示します。</p></section>
+        <section id="stocks-view" class="card result-panel empty-result" hidden><h2>母材一覧</h2><p>計算後に使用する母材を表示します。</p></section>
+        <section id="instructions-view" class="card result-panel empty-result" hidden><h2>切断手順</h2><p>計算後に現場向けの切断手順を表示します。</p></section>
         {% endif %}
+        </div>
+        <section class="card file-toolbar" aria-labelledby="management-actions-heading">
+            <h2 id="management-actions-heading" class="wide">管理・アクション</h2>
+            <div><strong>管理番号：</strong><span id="management-number">未発行</span></div>
+            <div><strong>保存状態：</strong><span id="save-status" class="unsaved">未保存</span></div>
+            <div class="file-actions">
+                <button type="button" id="save-record">保存</button>
+                <button type="button" id="download-json" disabled>JSONをダウンロード</button>
+                <button type="button" id="download-html" disabled>HTMLをダウンロード</button>
+                <button type="button" id="new-record">新規作成</button>
+                <button type="button" id="reset-input">入力リセット</button>
+            </div>
+            <label>保存済みJSONを読込
+                <select id="record-select">
+                    <option value="">選択してください</option>
+                    {% for number in records %}<option value="{{ number }}">{{ number }}</option>{% endfor %}
+                </select>
+            </label>
+            <button type="button" id="load-record">JSON読込</button>
+            <p id="file-message" role="alert"></p>
+        </section>
+            <section class="card common-information"><h2>共通情報</h2><div class="grid">
+                <label>件名<input form="calculation-form" name="title" value="{{ form.title }}"></label>
+                <label>母材種類<input form="calculation-form" name="material_type" value="{{ form.material_type }}"></label>
+                <label>データ製作者<input form="calculation-form" name="author" value="{{ form.author }}"></label>
+                <label class="wide">備考<textarea form="calculation-form" name="notes">{{ form.notes }}</textarea></label>
+            </div></section>
+        <dialog id="unsaved-dialog">
+            <p>未保存の変更があります。</p>
+            <button value="save">保存</button>
+            <button value="discard">破棄</button>
+            <button value="cancel">キャンセル</button>
+        </dialog>
         <template id="part-row-template"><div class="input-row"><label>寸法（mm）<input name="part_length" inputmode="numeric"></label><label>必要本数<input name="part_quantity" inputmode="numeric"></label><button type="button" class="remove">削除</button></div></template>
         <template id="remnant-row-template"><div class="input-row"><label>残材寸法（mm）<input name="remnant_length" inputmode="numeric"></label><label>保有本数<input name="remnant_quantity" inputmode="numeric"></label><button type="button" class="remove">削除</button></div></template>
         <script src="{{ url_for('static', path='/js/input.js') }}" defer></script>

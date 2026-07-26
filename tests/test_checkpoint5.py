@@ -239,6 +239,31 @@ def test_javascript_and_css_checkpoint5_contracts():
     assert "calculation-management-number" in template and "displayCalculationIdentity" in javascript
 
 
+def test_five_tabs_and_initial_selection_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    template = Path("app/templates/index.html").read_text(encoding="utf-8")
+    for label in ("入力条件・計算条件", "ダッシュボード", "パターン一覧", "母材一覧", "切断手順"):
+        assert label in template
+    assert template.count('data-result-view=') == 5
+    assert "data-has-result=\"{{ 'true' if result else 'false' }}\"" in template
+    assert 'showResultView(hasResult ? "dashboard-view" : "conditions-view")' in javascript
+    assert 'form.hidden = targetId' not in javascript
+    assert 'data-result-view="conditions-view"' in template
+    assert 'class="tab-content"' in template
+    assert 'form="calculation-form" name="title"' in template
+    assert 'document.querySelector(".common-information").addEventListener("input"' in javascript
+    assert "let dirty = hasResult" in javascript
+    for panel_id in ("dashboard-view", "patterns-view", "stocks-view", "instructions-view"):
+        assert f'id="{panel_id}"' in template
+
+
+def test_inventory_mode_reorders_only_input_sections():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    assert 'const requiredPartsFields = document.querySelector("#part-rows").closest(".card")' in javascript
+    assert "form.insertBefore(inventoryFields, inventoryMode ? requiredPartsFields : calculateButton)" in javascript
+    assert "inventoryFields.hidden = !inventoryMode" in javascript
+
+
 def test_successful_calculation_scroll_contract():
     javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
     css = Path("app/static/css/style.css").read_text(encoding="utf-8")
@@ -248,7 +273,7 @@ def test_successful_calculation_scroll_contract():
     assert "sessionStorage.setItem(calculationScrollKey" in submit_handler
     assert "sessionStorage.removeItem(calculationScrollKey)" in javascript
     assert "if (resultTabs)" in javascript
-    assert "if (shouldScrollToResults)" in javascript
+    assert "if (shouldScrollToResults && hasResult)" in javascript
     assert javascript.index('showResultView("dashboard-view")') < javascript.index("scrollIntoView")
     assert 'scrollIntoView({behavior: "smooth", block: "start"})' in javascript
     assert "scroll-margin-top:16px" in css

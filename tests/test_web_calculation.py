@@ -30,6 +30,53 @@ def test_calculation_identity_and_fixed_rules():
     assert response.text.count('name="kerf_mm"') == 1
     assert response.text.count('name="left_trim_mm"') == 1
 
+def test_tabs_before_calculation_and_on_input_error():
+    initial=client.get("/")
+    assert initial.text.count('data-result-view=') == 5
+    assert 'data-has-result="false"' in initial.text
+    input_button=re.search(r'<button[^>]*data-result-view="conditions-view"[^>]*>',initial.text).group()
+    assert 'class="active"' in input_button
+    assert initial.text.count("計算後に") == 5
+    error=client.post("/",data=normal(part_length="",part_quantity=""))
+    assert 'data-has-result="false"' in error.text
+    error_input_button=re.search(r'<button[^>]*data-result-view="conditions-view"[^>]*>',error.text).group()
+    assert 'class="active"' in error_input_button
+    assert "計算結果ダッシュボード" not in error.text
+
+
+def test_corrected_tab_window_and_following_section_order():
+    response=client.get("/")
+    html=response.text
+    calculate_position=html.index('class="calculate-button"')
+    tabs_position=html.index('class="result-tabs"')
+    window_position=html.index('class="tab-content"')
+    management_position=html.index('id="management-actions-heading"')
+    common_position=html.index('class="card common-information"')
+    assert calculate_position < tabs_position < window_position < management_position < common_position
+    shared_window=html[window_position:management_position]
+    assert shared_window.count('class="card result-panel') == 5
+    for panel_id in ("conditions-view", "dashboard-view", "patterns-view", "stocks-view", "instructions-view"):
+        assert f'id="{panel_id}"' in shared_window
+    assert 'form="calculation-form" name="title"' in html
+    assert 'form="calculation-form" name="notes"' in html
+
+
+def test_success_selects_dashboard_and_snapshot_totals_are_stable():
+    response=client.post("/",data=normal(new_stock_length_mm="2000",part_length=["500","200","500"],part_quantity=["2","3","1"]))
+    assert response.status_code==200
+    assert 'data-has-result="true"' in response.text
+    dashboard_button=re.search(r'<button[^>]*data-result-view="dashboard-view"[^>]*>',response.text).group()
+    assert 'class="active"' in dashboard_button
+    for text in ("計算時の入力条件", "必要部材の種類数", "3種類", "必要部材の合計本数", "6本", "必要部材の合計長さ", "2100mm"):
+        assert text in response.text
+    assert "500mm × 3本" in response.text
+    assert "200mm × 3本" in response.text
+    assert "前回計算時点" in response.text
+    assert "右端捨て切り：なし" in response.text
+    assert "残材50mm以下：廃棄" in response.text
+    assert "左から順に切断" in response.text
+
+
 def test_required_stock_calculation_and_escape():
     response=client.post("/",data=normal())
     assert response.status_code==200

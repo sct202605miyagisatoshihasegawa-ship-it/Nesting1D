@@ -1,6 +1,28 @@
 :root {
     color-scheme: dark;
 
+    --color-bg: #090d12;
+    --color-bg-elevated: #0d141c;
+    --color-card: #131d28;
+    --color-card-muted: #0f1821;
+    --color-border: #334457;
+    --color-border-strong: #60758a;
+    --color-text: #f3f6f8;
+    --color-text-muted: #b7c2cc;
+    --color-accent: #5fd39a;
+    --color-accent-strong: #34b77a;
+    --color-accent-text: #07150e;
+    --color-button: #26384a;
+    --color-button-hover: #31485d;
+    --color-tab: #243547;
+    --color-tab-active: var(--color-accent);
+    --color-result-card: #101a24;
+    --color-danger: #d86d74;
+    --color-danger-bg: #3a1d23;
+    --color-warning: #ffc27d;
+    --shadow-card: 0 12px 32px rgb(0 0 0 / 28%);
+    --focus-ring: 0 0 0 3px rgb(95 211 154 / 24%);
+
     font-family:
         system-ui,
         -apple-system,
@@ -8,8 +30,8 @@
         "Segoe UI",
         sans-serif;
 
-    color: #e8edf2;
-    background: #101418;
+    color: var(--color-text);
+    background: var(--color-bg);
 }
 
 * {
@@ -22,8 +44,8 @@ body {
     background:
         radial-gradient(
             circle at top right,
-            #263641 0,
-            #101418 45%
+            #182735 0,
+            var(--color-bg) 46%
         );
 }
 
@@ -159,6 +181,26 @@ dialog {
     background: #1b2228;
 }
 dialog::backdrop { background: rgb(0 0 0 / 70%); }
+
+/* Dark theme foundation. Existing layout selectors stay unchanged. */
+.card,.status-card{border-color:var(--color-border);background:rgb(19 29 40/92%);box-shadow:var(--shadow-card)}
+.description,label,.material-results,.dashboard-grid span,.stock-card dt,.mini-card dt{color:var(--color-text-muted)}
+.eyebrow,.summary-grid strong,.dashboard-grid strong,.instruction-card h3,.status-ok,.saved{color:var(--color-accent)}
+input,textarea,select{border-color:var(--color-border-strong);color:var(--color-text);background:var(--color-bg-elevated)}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px;box-shadow:var(--focus-ring)}
+.input-row{border-color:var(--color-border);background:var(--color-card-muted)}
+.secondary,.file-actions button,.file-toolbar>button,dialog button{border:1px solid var(--color-border);color:var(--color-text);background:var(--color-button)}
+.secondary:hover,.file-actions button:hover,.file-toolbar>button:hover,dialog button:hover{background:var(--color-button-hover)}
+.remove{border:1px solid #70404a;background:var(--color-danger-bg)}
+.calculate-button{color:var(--color-accent-text);background:var(--color-accent)}.calculate-button:hover{background:var(--color-accent-strong)}
+.error-box{border-color:var(--color-danger);background:var(--color-danger-bg)}
+.result-tabs{border-color:var(--color-border);background:var(--color-bg-elevated);box-shadow:var(--shadow-card)}
+.result-tabs button{color:var(--color-text);background:var(--color-tab)}.result-tabs button:hover{background:var(--color-button-hover)}.result-tabs button.active{color:var(--color-accent-text);background:var(--color-tab-active)}
+.summary-grid div,.dashboard-grid>div,.mini-card,.pattern-card,.stock-card,.instruction-card,.inventory-summary p{border-color:var(--color-border);background:var(--color-result-card)}
+.dashboard-grid>div,.mini-card,.pattern-card,.stock-card,.instruction-card{box-shadow:0 8px 20px rgb(0 0 0/18%)}
+.field-mode{border-color:var(--color-accent)}.field-note{border-left-color:var(--color-accent);background:#10271d}
+.unsaved,#file-message{color:var(--color-warning)}
+dialog{border-color:var(--color-border);color:var(--color-text);background:var(--color-card);box-shadow:var(--shadow-card)}
 @media (max-width: 600px) {
     .file-toolbar { grid-template-columns: 1fr; }
     .file-actions { display: grid; grid-template-columns: 1fr; }

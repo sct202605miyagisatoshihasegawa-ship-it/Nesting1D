@@ -31,3 +31,24 @@ form.addEventListener("submit", () => {
 });
 
 updateMode();
+
+const resultTabs = document.querySelector(".result-tabs");
+if (resultTabs) {
+    const panels = document.querySelectorAll(".result-panel");
+    function showResultView(targetId) {
+        form.hidden = targetId !== "calculation-form";
+        panels.forEach((panel) => {
+            panel.hidden = panel.id !== targetId;
+        });
+        resultTabs.querySelectorAll("button").forEach((button) => {
+            const active = button.dataset.resultView === targetId;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+    }
+    resultTabs.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-result-view]");
+        if (button) showResultView(button.dataset.resultView);
+    });
+    showResultView("dashboard-view");
+}

@@ -79,16 +79,94 @@
             </section>
             <button type="submit" class="calculate-button">計算する</button><p id="processing" hidden>計算中です…</p>
         </form>
-        {% if result %}<section class="card result" aria-live="polite"><h2>計算結果</h2>
-            <div class="summary-grid">
+        {% if result %}
+        <nav class="result-tabs" aria-label="結果表示切替">
+            <button type="button" data-result-view="calculation-form">入力・計算条件</button>
+            <button type="button" data-result-view="dashboard-view" class="active">ダッシュボード</button>
+            <button type="button" data-result-view="patterns-view">パターン一覧</button>
+            <button type="button" data-result-view="stocks-view">母材一覧</button>
+            <button type="button" data-result-view="instructions-view">切断手順</button>
+        </nav>
+
+        <section id="dashboard-view" class="card result-panel" aria-live="polite">
+            <h2>計算結果ダッシュボード</h2>
+            <div class="dashboard-grid">
                 <div><span>使用母材数</span><strong>{{ result.required_stock_quantity }}</strong></div>
-                <div><span>追加購入新品母材</span><strong>{{ result.additional_new_stock_required }}</strong></div>
+                <div><span>保有新品母材使用数</span><strong>{{ result.inventory_new_stock_used }}</strong></div>
+                <div><span>追加購入新品母材数</span><strong>{{ result.additional_new_stock_required }}</strong></div>
                 <div><span>パターン数</span><strong>{{ result.patterns|length }}</strong></div>
+                <div><span>合計残材</span><strong>{{ view.remnant_total }}mm</strong></div>
+                <div><span>合計廃棄材</span><strong>{{ view.scrap_total }}mm</strong></div>
+                <div><span>必要部材の充足</span><strong>{{ view.completed_total }} / {{ view.required_total }}本</strong></div>
+                <div><span>寸法変更回数</span><strong>{{ result.dimension_change_count }}回</strong></div>
+                <div><span>機械設定回数</span><strong>{{ result.machine_setting_count }}回</strong></div>
             </div>
-            <h3>寸法別の充足状況</h3><div class="table-wrap"><table><thead><tr><th>寸法</th><th>完成</th><th>不足</th></tr></thead><tbody>
-            {% for item in result.fulfillment %}<tr><td>{{ item.length_mm }}mm</td><td>{{ item.completed_total_quantity }}本</td><td>{{ item.shortage_after_purchase_quantity }}本</td></tr>{% endfor %}
-            </tbody></table></div>
-        </section>{% endif %}
+            <h3>寸法別の充足状況</h3>
+            <div class="fulfillment-grid">
+            {% for item in result.fulfillment %}
+                <article class="mini-card"><h4>{{ item.length_mm }}mm</h4><dl>
+                    <div><dt>必要</dt><dd>{{ item.required_quantity }}本</dd></div>
+                    <div><dt>完成</dt><dd>{{ item.completed_total_quantity }}本</dd></div>
+                    <div><dt>不足</dt><dd>{{ item.shortage_after_purchase_quantity }}本</dd></div>
+                </dl></article>
+            {% endfor %}
+            </div>
+            {% if result.mode == 'inventory' %}
+            <h3>在庫モード結果</h3>
+            <div class="inventory-summary">
+                <p>使用した既存残材：<strong>{{ result.existing_remnant_used }}本</strong></p>
+                <p>使用した保有新品母材：<strong>{{ result.inventory_new_stock_used }}本</strong></p>
+                <p>追加購入新品母材：<strong>{{ result.additional_new_stock_required }}本</strong></p>
+                <p>使い切り：<strong>{{ view.used_up_count }}本</strong></p>
+            </div>
+            <h4>未使用在庫</h4>
+            {% if view.unused_inventory %}<div class="card-list">
+            {% for item in view.unused_inventory %}<article class="mini-card unused-inventory">
+                <strong>{{ item.source_label }}：{{ item.length_mm }}mm × {{ item.quantity }}本</strong><p>{{ item.reason }}</p>
+            </article>{% endfor %}</div>{% else %}<p>未使用在庫はありません。</p>{% endif %}
+            {% endif %}
+        </section>
+
+        <section id="patterns-view" class="card result-panel" hidden>
+            <h2>パターン一覧</h2><div class="card-list">
+            {% for pattern in view.patterns %}<article class="pattern-card">
+                <header><h3>{{ pattern.pattern_id }}</h3><strong>{{ pattern.usage_count }}回使用</strong></header>
+                <p>部材：{% for part in pattern.parts %}<span class="cut-chip">{{ part.length_mm }}mm × {{ part.quantity }}本</span>{% endfor %}</p>
+                <div class="material-results">
+                {% for material in pattern.materials %}<p>使用長 {{ material.used_length_mm }}mm ／
+                    <strong>{{ material.state_label }}</strong>{% if material.remainder_class != 'used_up' %} {{ material.remaining_length_mm }}mm{% endif %}
+                </p>{% endfor %}
+                </div>
+            </article>{% endfor %}</div>
+        </section>
+
+        <section id="stocks-view" class="card result-panel" hidden>
+            <h2>母材一覧</h2><div class="stock-grid">
+            {% for stock in view.usages %}<article class="stock-card">
+                <header><span>No.{{ stock.stock_number }}</span><strong>{{ stock.source_label }}</strong></header>
+                <dl><div><dt>元の長さ</dt><dd>{{ stock.original_length_mm }}mm</dd></div>
+                    <div><dt>パターン</dt><dd>{{ stock.pattern_id }}</dd></div>
+                    <div><dt>切り出し</dt><dd>{% for cut in stock.cuts %}{{ cut }}mm{% if not loop.last %}、{% endif %}{% endfor %}</dd></div>
+                    <div><dt>使用後</dt><dd>{{ stock.state_label }}{% if stock.remainder_class != 'used_up' %} {{ stock.remaining_length_mm }}mm{% endif %}</dd></div>
+                    <div><dt>在庫区分</dt><dd>{{ stock.source_label }}</dd></div></dl>
+            </article>{% endfor %}</div>
+        </section>
+
+        <section id="instructions-view" class="card result-panel field-mode" hidden>
+            <h2>切断手順（現場モード）</h2>
+            <p class="field-note">同じパターンはまとめて加工してください。初回設定は寸法変更回数に含みません。</p>
+            <ol class="instruction-list">
+            {% for pattern in view.patterns %}<li class="instruction-card">
+                <h3>{{ pattern.pattern_id }}を{{ pattern.usage_count }}回加工</h3>
+                <p>1. 母材を{{ pattern.usage_count }}本用意します。</p>
+                <p>2. 左端を{{ view.left_trim_mm }}mm捨て切りします（鋸刃厚{{ view.kerf_mm }}mmを1回消費）。</p>
+                {% for part in pattern.parts %}<p>{{ loop.index + 2 }}. ストッパーを{{ part.length_mm }}mmに設定し、母材1本につき{{ part.quantity }}本、合計{{ part.quantity * pattern.usage_count }}本切断します。</p>{% endfor %}
+                <p class="finish-state">加工後：{% for material in pattern.materials %}{{ material.source_label }}は{{ material.state_label }}{% if material.remainder_class != 'used_up' %} {{ material.remaining_length_mm }}mm{% endif %}{% if not loop.last %} ／ {% endif %}{% endfor %}</p>
+            </li>{% endfor %}
+            </ol>
+            <p>パターン間を含む寸法変更：{{ result.dimension_change_count }}回 ／ 機械設定：{{ result.machine_setting_count }}回</p>
+        </section>
+        {% endif %}
         <template id="part-row-template"><div class="input-row"><label>寸法（mm）<input name="part_length" inputmode="numeric"></label><label>必要本数<input name="part_quantity" inputmode="numeric"></label><button type="button" class="remove">削除</button></div></template>
         <template id="remnant-row-template"><div class="input-row"><label>残材寸法（mm）<input name="remnant_length" inputmode="numeric"></label><label>保有本数<input name="remnant_quantity" inputmode="numeric"></label><button type="button" class="remove">削除</button></div></template>
         <script src="{{ url_for('static', path='/js/input.js') }}" defer></script>

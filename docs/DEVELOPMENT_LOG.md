@@ -34,5 +34,27 @@
 - 変更ファイル：`app/main.py`、`app/templates/index.html`、`app/static/css/style.css`、`app/static/js/input.js`、`tests/test_web_calculation.py`、開発記録2ファイル。
 - 実行したテスト：全pytest、差分範囲・空白確認。
 - テスト結果：27件成功、0件失敗。既存警告1件。
+
+## 2026-07-26：チェック4 結果画面と現場モード完成
+- 実装した内容：結果ダッシュボード、集約パターン、母材カード、在庫結果、切断手順、5画面切替、レスポンシブ表示を実装。
+- 実装理由：計算結果を管理者の確認と現場の機械操作の両方に使える形で提示するため。
+- 要件定義との対応：第12.2〜12.5章、第13章、第18章、第19.5章。
+- 採用した設計：既存`CalculationResult`だけを表示用に決定的に整形し、計算式は画面へ持ち込まない。表に依存せずカードを基本とし、同一パターンは使用回数付きで集約表示する。
+- 変更したファイル：`app/main.py`、`app/templates/index.html`、`app/static/css/style.css`、`app/static/js/input.js`、`tests/test_web_calculation.py`、`docs/DEVELOPMENT_LOG.md`、`docs/TEST_RESULTS.md`。
+- 実行したテスト：`pytest -q tests/test_web_calculation.py`、`pytest -q`、`git diff --check`、変更範囲確認。
+- テスト結果：32件成功、0件失敗。既存のStarlette非推奨警告1件。
+- 未解決事項：`INPUT_OUTPUT_SCHEMA.md`の古い`scrap`表記は、`DECISIONS.md`の`used_up`が最新仕様であり、後の文書整合性確認で修正が必要。結果画面の実機・スマートフォン人間確認は未実施。
+- 将来JavaScriptへ移植する際の注意点：計算結果の列挙値、パターン順、母材順、理由コードを共通化し、今回の表示用ラベル変換と計算処理を混在させない。
+- 新しい仕様判断：なし。確定済みの結果モデルと表示要件のみを使用した。
 - 未解決事項：`INPUT_OUTPUT_SCHEMA.md`の古い`scrap`表記は、`DECISIONS.md`の`used_up`が最新仕様であり、後の文書整合性確認で修正が必要。
 - JavaScript移植時の注意：今回のJavaScriptは行操作と表示切替だけで、計算・最終検証を含まない。
+
+### 人間確認修正：未使用在庫の理由と材料区分
+- 実装した内容：未使用在庫へ材料区分を追加し、充足済み・寸法不足・追加購入抑制の理由コードを区別。保有新品母材の未使用分も結果へ追加し、画面の見出し・日本語理由を修正。
+- 実装理由：必要部材充足後の材料が寸法不足と表示される混乱を解消するため。
+- 採用した設計：必要数の有無を材料処理前に判定し、計算結果の理由コードを表示側で固定日本語へ変換する。
+- 変更したファイル：`app/calculation/engine.py`、`tests/calculation/test_inventory.py`、`app/main.py`、`app/templates/index.html`、`tests/test_web_calculation.py`、開発記録3ファイル。
+- 実行したテスト：全`pytest`、例6・7、未使用在庫代表例、`git diff --check`。
+- テスト結果：36件成功、0件失敗。例6・7の割り当て、追加購入数、完成数に変更なし。
+- 未解決事項：実画面での未使用在庫カードの人間再確認。
+- JavaScript移植時の注意：`source_type`と3種類の理由コードを同じ列挙値で維持し、表示側で理由を推測しない。

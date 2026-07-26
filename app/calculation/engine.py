@@ -20,18 +20,23 @@ def _plan(data, sequence, remnants=True):
         raise ValueError("新品母材から切り出せない部材があります")
     stocks=[]; unused=[]; inv_done=Counter()
     if data.inventory and not remnants:
-        unused=[{"length_mm":r.length_mm,"quantity":r.quantity,"reason_code":"NOT_SELECTED_TO_AVOID_EXTRA_PURCHASE"} for r in sorted(data.inventory.remnants,key=lambda x:x.length_mm)]
+        unused=[{"source_type":"existing_remnant","length_mm":r.length_mm,"quantity":r.quantity,"reason_code":"NOT_SELECTED_TO_AVOID_EXTRA_PURCHASE"} for r in sorted(data.inventory.remnants,key=lambda x:x.length_mm)]
     if data.inventory and remnants:
         for r in sorted(data.inventory.remnants,key=lambda x:x.length_mm):
-            for _ in range(r.quantity):
+            for index in range(r.quantity):
+                if not sum(needs.values()):
+                    unused.append({"source_type":"existing_remnant","length_mm":r.length_mm,"quantity":r.quantity-index,"reason_code":"NOT_NEEDED"})
+                    break
                 cuts=_fill(r.length_mm,needs,sequence,c.left_trim_mm,c.kerf_mm)
                 if cuts: stocks.append(("existing_remnant",r.length_mm,cuts))
-                else: unused.append({"length_mm":r.length_mm,"quantity":1,"reason_code":"NO_REQUIRED_PART_FITS_AFTER_TRIM"})
+                else: unused.append({"source_type":"existing_remnant","length_mm":r.length_mm,"quantity":1,"reason_code":"NO_REQUIRED_PART_FITS_AFTER_TRIM"})
     if data.inventory:
-        for _ in range(data.inventory.new_stock_quantity):
+        for index in range(data.inventory.new_stock_quantity):
+            if not sum(needs.values()):
+                unused.append({"source_type":"held_new_stock","length_mm":c.new_stock_length_mm,"quantity":data.inventory.new_stock_quantity-index,"reason_code":"NOT_NEEDED"})
+                break
             cuts=_fill(c.new_stock_length_mm,needs,sequence,c.left_trim_mm,c.kerf_mm)
             if cuts: stocks.append(("inventory_new_stock",c.new_stock_length_mm,cuts))
-            if not sum(needs.values()): break
         original=Counter(); [original.update({p.length_mm:p.quantity}) for p in data.required_parts]; inv_done=original-needs
     while sum(needs.values()):
         cuts=_fill(c.new_stock_length_mm,needs,sequence,c.left_trim_mm,c.kerf_mm)

@@ -27,8 +27,38 @@ def test_unusable_remnant_is_not_error():
     assert result.existing_remnant_used == 0
     assert result.unused_inventory[0]["reason_code"] == "NO_REQUIRED_PART_FITS_AFTER_TRIM"
     assert result.additional_new_stock_required == 1
+    assert result.unused_inventory[0]["source_type"] == "existing_remnant"
 
 
 def test_zero_remainder_is_used_up():
     result=calculate(inventory([{"length_mm":600,"quantity":1}],0,[{"length_mm":600,"quantity":1}]))
     assert result.stock_usage[0]["remainder_class"] == "used_up"
+
+def test_remaining_remnant_after_fulfillment_is_not_needed():
+    result=calculate(inventory([{"length_mm":600,"quantity":2}],0,[{"length_mm":600,"quantity":1}]))
+    assert result.existing_remnant_used == 1
+    assert result.additional_new_stock_required == 0
+    assert result.fulfillment[0]["completed_total_quantity"] == 1
+    assert result.unused_inventory == [{
+        "source_type":"existing_remnant",
+        "length_mm":600,
+        "quantity":1,
+        "reason_code":"NOT_NEEDED",
+    }]
+
+def test_remaining_held_new_stock_after_fulfillment_is_not_needed():
+    result=calculate(inventory([],2,[{"length_mm":600,"quantity":1}]))
+    assert result.inventory_new_stock_used == 1
+    assert result.additional_new_stock_required == 0
+    assert result.fulfillment[0]["completed_total_quantity"] == 1
+    assert result.unused_inventory == [{
+        "source_type":"held_new_stock",
+        "length_mm":1000,
+        "quantity":1,
+        "reason_code":"NOT_NEEDED",
+    }]
+
+def test_example_6_7_counts_remain_unchanged():
+    result=calculate(inventory([{"length_mm":600,"quantity":1}],1,[{"length_mm":600,"quantity":1},{"length_mm":400,"quantity":1}]))
+    assert (result.existing_remnant_used,result.inventory_new_stock_used,result.additional_new_stock_required)==(1,1,0)
+    assert [(x["length_mm"],x["completed_total_quantity"],x["shortage_after_purchase_quantity"]) for x in result.fulfillment]==[(600,1,0),(400,1,0)]

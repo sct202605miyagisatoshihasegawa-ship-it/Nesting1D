@@ -4,12 +4,16 @@ from typing import Any
 from fastapi import FastAPI, Request
 from pydantic import ValidationError
 from app.calculation import CalculationInput, calculate
-from fastapi.responses import HTMLResponse
+from app.exporting import make_record, render_report
+from app.storage import RecordStorage, StorageError, tokyo_now
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 
 BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR.parent / "data"
+storage = RecordStorage(DATA_DIR)
 DEFAULT_FORM={"mode":"required_stock","title":"","material_type":"","author":"","notes":"","new_stock_length_mm":"","kerf_mm":"0","left_trim_mm":"10","new_stock_quantity":"0","part_lengths":[""],"part_quantities":[""],"remnant_lengths":[""],"remnant_quantities":[""]}
 
 
@@ -35,7 +39,13 @@ def read_root(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"form":DEFAULT_FORM,"errors":[],"result":None,"view":None},
+        context={
+            "form": DEFAULT_FORM,
+            "errors": [],
+            "result": None,
+            "view": None,
+            "records": storage.list_records(),
+        },
     )
 
 
@@ -135,7 +145,97 @@ async def calculate_from_form(request:Request)->HTMLResponse:
         except ValidationError: errors.append("入力件数または合計本数が上限を超えています。入力を確認してください。")
         except ValueError as exc: errors.append(str(exc))
         except Exception: errors.append("計算中に予期しないエラーが発生しました。入力を確認して再度お試しください。")
-    return templates.TemplateResponse(request=request,name="index.html",context={"form":form,"errors":errors,"result":result,"view":view})
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={
+            "form": form,
+            "errors": errors,
+            "result": result,
+            "view": view,
+            "records": storage.list_records(),
+        },
+    )
+
+
+def _saved_input(data: dict):
+    payload = {key: data[key] for key in ("mode", "cutting_conditions", "required_parts")}
+    if data["mode"] == "inventory":
+        payload["inventory"] = data.get("inventory")
+    calculation_input = CalculationInput.model_validate(payload)
+    result = calculate(calculation_input)
+    form = {
+        "left_trim_mm": str(calculation_input.cutting_conditions.left_trim_mm),
+        "kerf_mm": str(calculation_input.cutting_conditions.kerf_mm),
+    }
+    return calculation_input, result, _display_result(result, form)
+
+
+def _save_error(message: str = "処理できませんでした。入力内容を確認してください。"):
+    return JSONResponse({"ok": False, "message": message}, status_code=400)
+
+
+@app.post("/api/save")
+async def save_record(request: Request):
+    try:
+        body = await request.json()
+        input_data = body["input"]
+        calculation_input, result, view = _saved_input(input_data)
+        input_data = calculation_input.model_dump() | {"metadata": input_data.get("metadata", {})}
+        number = str(body.get("management_number", ""))
+        if number:
+            existing = storage.load(number)
+            if not body.get("overwrite"):
+                return JSONResponse(
+                    {"ok": False, "confirm_overwrite": True, "message": "同じ管理番号の保存データがあります。上書きしますか？"},
+                    status_code=409,
+                )
+            record = make_record(number, tokyo_now(), input_data, result.model_dump(), created_at=existing["created_at"])
+            storage.overwrite(record, render_report(templates, record, view))
+        else:
+            def builder(new_number, now):
+                new_record = make_record(new_number, now, input_data, result.model_dump())
+                return new_record, render_report(templates, new_record, view)
+            record = storage.save_new(builder)
+        return {"ok": True, "management_number": record["management_number"], "updated_at": record["updated_at"]}
+    except (KeyError, TypeError, ValidationError, ValueError, StorageError):
+        return _save_error()
+    except Exception:
+        return _save_error()
+
+
+@app.get("/api/records/{management_number}")
+def load_record(management_number: str):
+    try:
+        return {"ok": True, "record": storage.load(management_number)}
+    except StorageError as exc:
+        return _save_error(str(exc))
+
+
+@app.get("/download/{management_number}.json")
+def download_json(management_number: str):
+    try:
+        record = storage.load(management_number)
+        response = JSONResponse(record)
+        response.headers["Content-Disposition"] = f'attachment; filename="{management_number}.json"'
+        return response
+    except StorageError:
+        return Response("保存データが見つかりません。", status_code=404)
+
+
+@app.get("/download/{management_number}.html")
+def download_html(management_number: str):
+    try:
+        record = storage.load(management_number)
+        _, result, view = _saved_input(record["input"])
+        content = render_report(templates, record | {"calculation_result": result.model_dump()}, view)
+        return Response(
+            content,
+            media_type="text/html; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{management_number}.html"'},
+        )
+    except (StorageError, ValidationError, ValueError):
+        return Response("保存データが見つからないか、内容が正しくありません。", status_code=404)
 
 
 @app.get("/health")

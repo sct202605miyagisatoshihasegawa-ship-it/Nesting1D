@@ -26,3 +26,6 @@ data/output/*
 Thumbs.db
 
 AGENTS.md.backup
+
+data/*
+!data/.gitkeep

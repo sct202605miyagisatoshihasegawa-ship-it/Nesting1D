@@ -40,6 +40,31 @@
                 </div>
             </dl>
         </section>
+        <section class="card file-toolbar" aria-label="保存と読込">
+            <div><strong>管理番号：</strong><span id="management-number">未発行</span></div>
+            <div><strong>保存状態：</strong><span id="save-status" class="unsaved">未保存</span></div>
+            <div class="file-actions">
+                <button type="button" id="save-record">保存</button>
+                <button type="button" id="download-json" disabled>JSONをダウンロード</button>
+                <button type="button" id="download-html" disabled>HTMLをダウンロード</button>
+                <button type="button" id="new-record">新規作成</button>
+                <button type="button" id="reset-input">入力リセット</button>
+            </div>
+            <label>保存済みJSONを読込
+                <select id="record-select">
+                    <option value="">選択してください</option>
+                    {% for number in records %}<option value="{{ number }}">{{ number }}</option>{% endfor %}
+                </select>
+            </label>
+            <button type="button" id="load-record">JSON読込</button>
+            <p id="file-message" role="alert"></p>
+        </section>
+        <dialog id="unsaved-dialog">
+            <p>未保存の変更があります。</p>
+            <button value="save">保存</button>
+            <button value="discard">破棄</button>
+            <button value="cancel">キャンセル</button>
+        </dialog>
         <form method="post" class="calculator" id="calculation-form" novalidate>
             <section class="card"><h2>計算モード</h2><div class="mode-options">
                 <label><input type="radio" name="mode" value="required_stock" {% if form.mode == 'required_stock' %}checked{% endif %}> 必要母材算出</label>

@@ -49,7 +49,7 @@
     {"pattern_id": "P02", "usage_count": 1, "parts": [{"length_mm": 400, "quantity": 1}], "dimension_change_count": 0}
   ],
   "stock_usage": [
-    {"stock_no": 1, "source_type": "existing_remnant", "original_length_mm": 600, "pattern_id": "P01", "cuts": [600], "used_length_mm": 600, "remaining_length_mm": 0, "remainder_class": "scrap"},
+    {"stock_no": 1, "source_type": "existing_remnant", "original_length_mm": 600, "pattern_id": "P01", "cuts": [600], "used_length_mm": 600, "remaining_length_mm": 0, "remainder_class": "used_up"},
     {"stock_no": 2, "source_type": "additional_new_stock", "original_length_mm": 1000, "pattern_id": "P02", "cuts": [400], "used_length_mm": 400, "remaining_length_mm": 600, "remainder_class": "remnant"}
   ],
   "unused_inventory": [],
@@ -68,7 +68,7 @@
 
 ## 5. 列挙値
 - `source_type`: `existing_remnant`, `inventory_new_stock`, `additional_new_stock`
-- `remainder_class`: `remnant`, `scrap`
+- `remainder_class`: `remnant`, `scrap`, `used_up`
 - `reason_code`: `NO_REQUIRED_PART_FITS_AFTER_TRIM`, `NOT_SELECTED_TO_AVOID_EXTRA_PURCHASE`, `NOT_NEEDED`
 - `optimality`: `best_among_generated_candidates`
 

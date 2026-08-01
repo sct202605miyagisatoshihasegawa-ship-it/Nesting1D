@@ -36,12 +36,7 @@ def select_candidate(
     waste_tolerance_mm: int = DEFAULT_WASTE_TOLERANCE_MM,
     remnant_tolerance_mm: int = DEFAULT_REMNANT_TOLERANCE_MM,
 ) -> SelectionCandidate:
-    """Select one candidate without mutating the supplied candidates.
-
-    ``remnant_tolerance_mm`` is validated and retained for the next selection
-    stage, but is not used yet because the preferred remnant direction is
-    intentionally undecided.
-    """
+    """Select one candidate without mutating the supplied candidates."""
     _validate_tolerance(waste_tolerance_mm, "waste_tolerance_mm")
     _validate_tolerance(remnant_tolerance_mm, "remnant_tolerance_mm")
 
@@ -61,10 +56,28 @@ def select_candidate(
     minimum_waste = min(
         candidate.waste_length_mm for candidate in minimum_purchase_candidates
     )
-    materially_equivalent = [
+    waste_equivalent = [
         candidate
         for candidate in minimum_purchase_candidates
         if candidate.waste_length_mm - minimum_waste <= waste_tolerance_mm
+    ]
+
+    minimum_remnant = min(
+        candidate.remnant_length_mm for candidate in waste_equivalent
+    )
+    remnant_equivalent = [
+        candidate
+        for candidate in waste_equivalent
+        if candidate.remnant_length_mm - minimum_remnant <= remnant_tolerance_mm
+    ]
+
+    minimum_remnant_count = min(
+        candidate.remnant_count for candidate in remnant_equivalent
+    )
+    materially_equivalent = [
+        candidate
+        for candidate in remnant_equivalent
+        if candidate.remnant_count == minimum_remnant_count
     ]
 
     return min(

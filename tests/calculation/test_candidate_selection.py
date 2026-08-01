@@ -72,12 +72,71 @@ def test_waste_difference_above_tolerance_prefers_less_waste():
     ) is less_waste
 
 
-def test_remnant_length_alone_does_not_decide_preference():
-    more_remnant = candidate("b", remnant=900, patterns=1)
-    less_remnant = candidate("a", remnant=100, patterns=1)
+def test_remnant_above_tolerance_prefers_less_remnant():
+    less_remnant = candidate("z", remnant=100, patterns=2)
+    more_remnant = candidate("a", remnant=126, patterns=1)
     assert select_candidate(
         [more_remnant, less_remnant], remnant_tolerance_mm=25
     ) is less_remnant
+
+
+@pytest.mark.parametrize("remnant_difference", [9, 10])
+def test_remnant_within_tolerance_proceeds_to_workability(remnant_difference):
+    less_remnant_but_more_work = candidate("b", remnant=0, patterns=2)
+    more_remnant_but_less_work = candidate(
+        "a", remnant=remnant_difference, patterns=1
+    )
+    assert select_candidate(
+        [less_remnant_but_more_work, more_remnant_but_less_work],
+        remnant_tolerance_mm=10,
+    ) is more_remnant_but_less_work
+
+
+def test_remnant_count_wins_when_remnant_length_is_within_tolerance():
+    fewer_remnants = candidate("z", remnant=10, remnant_count=1, patterns=2)
+    more_remnants = candidate("a", remnant=0, remnant_count=2, patterns=1)
+    assert select_candidate(
+        [more_remnants, fewer_remnants], remnant_tolerance_mm=10
+    ) is fewer_remnants
+
+
+def test_waste_comparison_precedes_remnant_length_comparison():
+    less_waste = candidate("z", waste=0, remnant=100, patterns=2)
+    less_remnant = candidate("a", waste=11, remnant=0, patterns=1)
+    assert select_candidate(
+        [less_remnant, less_waste],
+        waste_tolerance_mm=10,
+        remnant_tolerance_mm=0,
+    ) is less_waste
+
+
+def test_remnant_length_comparison_precedes_remnant_count_comparison():
+    less_remnant = candidate("z", remnant=0, remnant_count=2, patterns=2)
+    fewer_remnants = candidate("a", remnant=11, remnant_count=1, patterns=1)
+    assert select_candidate(
+        [fewer_remnants, less_remnant], remnant_tolerance_mm=10
+    ) is less_remnant
+
+
+def test_pattern_count_wins_when_remnant_count_matches():
+    fewer_patterns = candidate("z", remnant_count=1, patterns=1, changes=2)
+    more_patterns = candidate("a", remnant_count=1, patterns=2, changes=0)
+    assert select_candidate([more_patterns, fewer_patterns]) is fewer_patterns
+
+
+def test_waste_and_remnant_tolerances_act_independently():
+    less_waste = candidate("z", waste=0, remnant=20, patterns=2)
+    less_remnant = candidate("a", waste=10, remnant=0, patterns=1)
+    assert select_candidate(
+        [less_waste, less_remnant],
+        waste_tolerance_mm=10,
+        remnant_tolerance_mm=5,
+    ) is less_remnant
+    assert select_candidate(
+        [less_waste, less_remnant],
+        waste_tolerance_mm=5,
+        remnant_tolerance_mm=20,
+    ) is less_waste
 
 
 def test_candidate_clearly_worse_in_waste_is_removed():
@@ -117,6 +176,20 @@ def test_reversing_candidate_input_order_does_not_change_result():
     assert select_candidate(list(reversed(candidates)), waste_tolerance_mm=10) is candidates[1]
 
 
+def test_reversing_input_order_with_remnant_metrics_does_not_change_result():
+    candidates = [
+        candidate("c", remnant=10, remnant_count=2),
+        candidate("a", remnant=0, remnant_count=1),
+        candidate("b", remnant=5, remnant_count=1),
+    ]
+    selected = select_candidate(candidates, remnant_tolerance_mm=10)
+    reversed_selected = select_candidate(
+        list(reversed(candidates)), remnant_tolerance_mm=10
+    )
+    assert selected is candidates[1]
+    assert reversed_selected is candidates[1]
+
+
 def test_selection_does_not_mutate_candidates_or_source_list():
     candidates = [candidate("b"), candidate("a")]
     before = deepcopy(candidates)
@@ -139,9 +212,12 @@ def test_invalid_tolerance_is_rejected(keyword, value):
         select_candidate([candidate("a")], **{keyword: value})
 
 
-def test_default_zero_tolerances_use_strict_waste_comparison():
-    less_waste = candidate("z", waste=0, patterns=2)
-    more_waste = candidate("a", waste=1, patterns=1)
+def test_default_zero_tolerances_use_strict_waste_and_remnant_comparison():
+    less_waste = candidate("z", waste=0, remnant=100, patterns=2)
+    more_waste = candidate("a", waste=1, remnant=0, patterns=1)
+    less_remnant = candidate("z", waste=0, remnant=0, patterns=2)
+    more_remnant = candidate("a", waste=0, remnant=1, patterns=1)
     assert DEFAULT_WASTE_TOLERANCE_MM == 0
     assert DEFAULT_REMNANT_TOLERANCE_MM == 0
     assert select_candidate([more_waste, less_waste]) is less_waste
+    assert select_candidate([more_remnant, less_remnant]) is less_remnant

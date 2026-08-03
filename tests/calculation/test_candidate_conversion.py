@@ -3,6 +3,7 @@ from copy import deepcopy
 
 from app.calculation.engine import _build_selection_candidate, _plan
 from app.calculation.models import CalculationInput
+from app.calculation.selection import select_candidate
 
 
 def _inventory_input() -> CalculationInput:
@@ -155,13 +156,13 @@ def test_only_additional_new_stock_is_counted_as_purchase() -> None:
     assert candidate.additional_new_stock_count == 1
 
 
-def test_remainder_metrics_use_existing_boundary_rule() -> None:
+def test_remainder_metrics_use_fixed_50_51_boundary() -> None:
     data = CalculationInput.model_validate(
         {
             "mode": "required_stock",
             "cutting_conditions": {
-                "new_stock_length_mm": 166,
-                "kerf_mm": 5,
+                "new_stock_length_mm": 157,
+                "kerf_mm": 3,
                 "left_trim_mm": 0,
             },
             "required_parts": [{"length_mm": 100, "quantity": 2}],
@@ -169,8 +170,8 @@ def test_remainder_metrics_use_existing_boundary_rule() -> None:
     )
     plan = (
         [
-            ("additional_new_stock", 165, (100,)),
-            ("additional_new_stock", 166, (100,)),
+            ("additional_new_stock", 156, (100,)),
+            ("additional_new_stock", 157, (100,)),
         ],
         [],
         Counter(),
@@ -178,9 +179,37 @@ def test_remainder_metrics_use_existing_boundary_rule() -> None:
 
     candidate = _build_selection_candidate(data, plan)
 
-    assert candidate.waste_length_mm == 55
-    assert candidate.remnant_length_mm == 56
+    assert candidate.waste_length_mm == 50
+    assert candidate.remnant_length_mm == 51
     assert candidate.remnant_count == 1
+
+
+def test_fixed_boundary_is_reflected_in_candidate_selection() -> None:
+    data = CalculationInput.model_validate(
+        {
+            "mode": "required_stock",
+            "cutting_conditions": {
+                "new_stock_length_mm": 157,
+                "kerf_mm": 3,
+                "left_trim_mm": 0,
+            },
+            "required_parts": [{"length_mm": 100, "quantity": 1}],
+        }
+    )
+    scrap_candidate = _build_selection_candidate(
+        data,
+        ([("additional_new_stock", 156, (100,))], [], Counter()),
+    )
+    remnant_candidate = _build_selection_candidate(
+        data,
+        ([("additional_new_stock", 157, (100,))], [], Counter()),
+    )
+
+    selected = select_candidate([scrap_candidate, remnant_candidate])
+
+    assert scrap_candidate.waste_length_mm == 50
+    assert remnant_candidate.waste_length_mm == 0
+    assert selected is remnant_candidate
 
 
 def test_pattern_count_uses_existing_cut_pattern_definition() -> None:

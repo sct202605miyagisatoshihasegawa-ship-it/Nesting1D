@@ -19,9 +19,34 @@ def test_exact_fit_and_too_short():
     short=request(cutting_conditions={"new_stock_length_mm":119,"kerf_mm":5,"left_trim_mm":10},required_parts=[{"length_mm":100,"quantity":1}])
     with pytest.raises(ValueError): calculate(short)
 
-def test_remainder_boundary():
-    assert remainder_class(55,5) == "scrap"
-    assert remainder_class(56,5) == "remnant"
+@pytest.mark.parametrize(
+    ("remaining", "expected"),
+    [(0, "used_up"), (1, "scrap"), (50, "scrap"), (51, "remnant")],
+)
+def test_remainder_boundary(remaining, expected):
+    assert remainder_class(remaining) == expected
+
+
+@pytest.mark.parametrize("kerf", [0, 3, 5])
+@pytest.mark.parametrize(
+    ("remaining", "expected"), [(50, "scrap"), (51, "remnant")]
+)
+def test_calculation_result_remainder_boundary_does_not_depend_on_kerf(
+    kerf, remaining, expected
+):
+    used = kerf + 100 + kerf
+    data = request(
+        cutting_conditions={
+            "new_stock_length_mm": used + remaining,
+            "kerf_mm": kerf,
+            "left_trim_mm": 0,
+        },
+        required_parts=[{"length_mm": 100, "quantity": 1}],
+    )
+    usage = calculate(data).stock_usage[0]
+
+    assert usage["remaining_length_mm"] == remaining
+    assert usage["remainder_class"] == expected
     assert used_length([400,400],20,3) == 829
 
 @pytest.mark.parametrize("value", [0,-1,1.5,"10",1_000_001])

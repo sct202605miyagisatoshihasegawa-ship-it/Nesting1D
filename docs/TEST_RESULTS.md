@@ -166,3 +166,17 @@
 - 順序非依存性確認：完全同値候補は候補順を反転しても、reason_codeを含むCalculationResult全体が一致することを確認した。
 - 警告：既存のStarlette TestClient非推奨警告1件。変更対象外。
 - 人間確認が必要な項目：新選別固定結果と未使用理由の業務上の妥当性。
+
+
+## 2026-08-03：残材・廃棄材の50/51mm固定境界
+- 対象フェーズ：ケース7人間確認後の計算境界修正。
+- 実行したテスト：`pytest -q tests/calculation/test_required_stock.py tests/calculation/test_candidate_conversion.py tests/calculation/test_candidate_selection.py tests/calculation/test_candidate_connection.py tests/calculation/test_inventory.py tests/test_web_calculation.py -p no:cacheprovider`、全`pytest -q -p no:cacheprovider`、`git diff --check`、`git status --short`。
+- 成功件数：関連108件、全142件。
+- 失敗件数：0件。
+- 修正内容：残り0mm=`used_up`、1～50mm=`scrap`、51mm以上=`remnant`の固定境界へ修正し、鋸刃厚0・3・5mmで境界が変わらないことを確認した。candidate conversionで50mmが廃棄材評価、51mmが残材評価になることと、CalculationResultで51mm以上が残材になることを確認した。
+- 既存テスト結果の変更：55mm廃棄・56mm残材を期待していた旧境界テストを、確定仕様の50mm廃棄・51mm残材へ変更した。
+- 候補選択回帰：あり。鋸刃厚3mmで、旧境界なら廃棄材総量50mmの候補が51mmの候補より優先されたが、固定境界では51mmが残材となり廃棄材総量0mmになるため51mm残材候補が選ばれる。
+- 警告：既存のStarlette TestClient非推奨警告1件。変更対象外。
+- 人間確認が必要な項目：修正後のケース7で残り50mmが廃棄材、51mm以上が残材として表示されること。
+- 人間確認の結果：修正前は鋸刃厚3mmで51～53mmが廃棄材になる不整合を確認済み。修正後は未確認。
+- 保留事項：`NOT_NEEDED`の日本語表示改善は今回変更せず、別の受入確認改善事項とする。

@@ -81,7 +81,7 @@ def _build_selection_candidate(data: CalculationInput, plan) -> SelectionCandida
             conditions.left_trim_mm,
             conditions.kerf_mm,
         )
-        classification = remainder_class(remaining, conditions.kerf_mm)
+        classification = remainder_class(remaining)
         if classification == "scrap":
             waste_length_mm += remaining
         elif classification == "remnant":
@@ -138,6 +138,6 @@ def calculate(data: CalculationInput):
     unused = [dict(item) for item in selected.unused]
     inv_done = Counter(dict(selected.inventory_completed))
     ks=order(key(x[2]) for x in stocks); ids={k:f"P{i:02}" for i,k in enumerate(ks,1)}; counts=Counter(key(x[2]) for x in stocks); c=data.cutting_conditions
-    usage=[{"source_type":t,"original_length_mm":s,"cuts":list(cuts),"pattern_id":ids[key(cuts)],"used_length_mm":used_length(cuts,c.left_trim_mm,c.kerf_mm),"remaining_length_mm":remaining,"remainder_class":remainder_class(remaining,c.kerf_mm)} for t,s,cuts,remaining in selected.stocks]
+    usage=[{"source_type":t,"original_length_mm":s,"cuts":list(cuts),"pattern_id":ids[key(cuts)],"used_length_mm":used_length(cuts,c.left_trim_mm,c.kerf_mm),"remaining_length_mm":remaining,"remainder_class":remainder_class(remaining)} for t,s,cuts,remaining in selected.stocks]
     requested=Counter(); [requested.update({p.length_mm:p.quantity}) for p in data.required_parts]
     return CalculationResult(mode=data.mode,required_stock_quantity=len(stocks),additional_new_stock_required=selected.additional_new_stock_count,existing_remnant_used=sum(x[0]=="existing_remnant" for x in stocks),inventory_new_stock_used=sum(x[0]=="inventory_new_stock" for x in stocks),patterns=[{"pattern_id":ids[k],"usage_count":counts[k],"parts":[{"length_mm":a,"quantity":b} for a,b in k]} for k in ks],stock_usage=usage,unused_inventory=unused,dimension_change_count=selected.dimension_change_count,initial_setup_count=int(bool(ks)),machine_setting_count=int(bool(ks))+selected.dimension_change_count,fulfillment=[{"length_mm":x,"required_quantity":q,"completed_from_inventory_quantity":inv_done[x],"completed_total_quantity":q,"shortage_before_purchase_quantity":q-inv_done[x],"shortage_after_purchase_quantity":0} for x,q in sorted(requested.items(),reverse=True)])

@@ -188,3 +188,16 @@
 - テスト結果：全132件成功、0件失敗。既存のStarlette非推奨警告1件。
 - 未解決事項：廃棄材・残材許容値の本番調整値は未決定で、現在はいずれも0mm。
 - 将来JavaScriptへ移植する際の注意点：8段階順位、整数許容値、安定キーの項目順、未使用理由の優先順位を同一にする。
+
+
+## 2026-08-03：残材・廃棄材の50/51mm固定境界
+- 実装した内容：`remainder_class()`を鋸刃厚非依存の1引数関数へ変更し、残り0mmを使い切り、1～50mmを廃棄材、51mm以上を残材とした。engineの全呼出箇所、候補評価・CalculationResultの境界テスト、候補選択回帰テスト、関連仕様文書を更新した。
+- 実装理由：ケース7の人間確認で鋸刃厚3mm時に51～53mmが廃棄材となる不整合が見つかり、確定仕様の固定境界と実装が一致していなかったため。
+- 要件定義との対応：第5.2節の廃棄判定基準寸法、第8章の残材・廃棄材定義、第9.2節の候補選別、第11章の再現性。
+- 採用した設計：残材分類から`kerf`引数を除き、切出可否・使用長・残り長計算は変更しない。候補変換と最終結果は同じ`remainder_class()`を使用する。
+- 変更したファイル：`app/calculation/rules.py`、`app/calculation/engine.py`、`tests/calculation/test_required_stock.py`、`tests/calculation/test_candidate_conversion.py`、`docs/REQUIREMENTS.md`、`docs/CALCULATION_RULES.md`、`docs/CALCULATION_EXAMPLES.md`、`docs/DEVELOPMENT_ROADMAP.md`、`docs/DECISIONS.md`、`docs/DEVELOPMENT_LOG.md`、`docs/TEST_RESULTS.md`。
+- 実行したテスト：境界・候補変換・候補選択・候補接続・在庫・Webの関連pytest、全pytest、`git diff --check`、`git status --short`。
+- テスト結果：関連108件成功、全142件成功、失敗0件。既存のStarlette非推奨警告1件。
+- 既存結果の変更：旧境界を固定していた55mm廃棄・56mm残材の期待値を、50mm廃棄・51mm残材へ変更した。新規回帰例では旧境界時に選ばれる50mm廃棄候補から、修正後は廃棄材総量が少ない51mm残材候補へ選択結果が変わる。
+- 未解決事項：修正後のケース7について、実画面で残り50mmが廃棄材、51mm以上が残材と表示されることの人間再確認。`NOT_NEEDED`の日本語表示改善は別の受入確認改善事項として保留する。
+- 将来JavaScriptへ移植する際の注意点：0/1/50/51mmの固定境界と鋸刃厚非依存性を同じ列挙値・境界テストで維持する。

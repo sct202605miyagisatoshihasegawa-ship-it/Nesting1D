@@ -4,7 +4,7 @@ def used_length(cuts, trim, kerf):
 def remaining_length(stock, cuts, trim, kerf):
     return stock - used_length(cuts, trim, kerf)
 
-def remainder_class(remaining, kerf):
+def remainder_class(remaining):
     if remaining == 0:
         return "used_up"
-    return "scrap" if remaining <= 50 + kerf else "remnant"
+    return "scrap" if remaining <= 50 else "remnant"

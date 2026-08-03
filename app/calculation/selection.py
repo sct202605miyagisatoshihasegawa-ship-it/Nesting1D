@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Any, Sequence
+from dataclasses import dataclass, field
+from typing import Any, Mapping, Sequence
 
 
 DEFAULT_WASTE_TOLERANCE_MM = 0
@@ -8,6 +8,32 @@ DEFAULT_REMNANT_TOLERANCE_MM = 0
 
 class NoFullySatisfiedCandidateError(ValueError):
     """Raised when no candidate can satisfy every required part."""
+
+
+StockTieBreakEntry = tuple[str, int, tuple[int, ...], int]
+UnusedTieBreakEntry = tuple[str, int, int]
+StableTieBreakKey = tuple[
+    tuple[StockTieBreakEntry, ...],
+    tuple[UnusedTieBreakEntry, ...],
+]
+
+
+def build_stable_tie_break_key(
+    stocks: Sequence[Sequence[Any]],
+    unused: Sequence[Mapping[str, Any]],
+) -> StableTieBreakKey:
+    """Build an immutable key while preserving meaningful cutting order."""
+    stock_key = tuple(
+        (source_type, original_length_mm, tuple(cuts), remaining_length_mm)
+        for source_type, original_length_mm, cuts, remaining_length_mm in stocks
+    )
+    unused_key = tuple(
+        sorted(
+            (item["source_type"], item["length_mm"], item["quantity"])
+            for item in unused
+        )
+    )
+    return stock_key, unused_key
 
 
 @dataclass(frozen=True)
@@ -22,7 +48,14 @@ class SelectionCandidate:
     remnant_count: int
     pattern_count: int
     dimension_change_count: int
-    stable_tie_break_key: tuple[str, ...]
+    stable_tie_break_key: StableTieBreakKey = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "stable_tie_break_key",
+            build_stable_tie_break_key(self.stocks, self.unused),
+        )
 
 
 def _validate_tolerance(value: int, name: str) -> None:

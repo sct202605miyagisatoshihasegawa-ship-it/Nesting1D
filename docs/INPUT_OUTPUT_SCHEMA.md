@@ -36,23 +36,23 @@
   "summary": {
     "inventory_new_stock_used": 0,
     "additional_new_stock_required": 1,
-    "pattern_count": 2,
-    "total_remnant_length_mm": 600,
+    "pattern_count": 1,
+    "total_remnant_length_mm": 0,
     "total_scrap_length_mm": 0
   },
   "fulfillment": [
-    {"length_mm": 600, "required_quantity": 1, "completed_from_inventory_quantity": 1, "completed_total_quantity": 1, "shortage_before_purchase_quantity": 0, "shortage_after_purchase_quantity": 0},
+    {"length_mm": 600, "required_quantity": 1, "completed_from_inventory_quantity": 0, "completed_total_quantity": 1, "shortage_before_purchase_quantity": 1, "shortage_after_purchase_quantity": 0},
     {"length_mm": 400, "required_quantity": 1, "completed_from_inventory_quantity": 0, "completed_total_quantity": 1, "shortage_before_purchase_quantity": 1, "shortage_after_purchase_quantity": 0}
   ],
   "patterns": [
-    {"pattern_id": "P01", "usage_count": 1, "parts": [{"length_mm": 600, "quantity": 1}], "dimension_change_count": 0},
-    {"pattern_id": "P02", "usage_count": 1, "parts": [{"length_mm": 400, "quantity": 1}], "dimension_change_count": 0}
+    {"pattern_id": "P01", "usage_count": 1, "parts": [{"length_mm": 600, "quantity": 1}, {"length_mm": 400, "quantity": 1}], "dimension_change_count": 1}
   ],
   "stock_usage": [
-    {"stock_no": 1, "source_type": "existing_remnant", "original_length_mm": 600, "pattern_id": "P01", "cuts": [600], "used_length_mm": 600, "remaining_length_mm": 0, "remainder_class": "used_up"},
-    {"stock_no": 2, "source_type": "additional_new_stock", "original_length_mm": 1000, "pattern_id": "P02", "cuts": [400], "used_length_mm": 400, "remaining_length_mm": 600, "remainder_class": "remnant"}
+    {"stock_no": 1, "source_type": "additional_new_stock", "original_length_mm": 1000, "pattern_id": "P01", "cuts": [600, 400], "used_length_mm": 1000, "remaining_length_mm": 0, "remainder_class": "used_up"}
   ],
-  "unused_inventory": [],
+  "unused_inventory": [
+    {"source_type": "existing_remnant", "length_mm": 600, "quantity": 1, "reason_code": "NOT_SELECTED_BY_CANDIDATE_SELECTION"}
+  ],
   "optimization": {"optimality": "best_among_generated_candidates", "complete_mathematical_optimum_guaranteed": false}
 }
 ```
@@ -69,7 +69,9 @@
 ## 5. 列挙値
 - `source_type`: `existing_remnant`, `inventory_new_stock`, `additional_new_stock`
 - `remainder_class`: `remnant`, `scrap`, `used_up`
-- `reason_code`: `NO_REQUIRED_PART_FITS_AFTER_TRIM`, `NOT_SELECTED_TO_AVOID_EXTRA_PURCHASE`, `NOT_NEEDED`
+- `reason_code`: `NO_REQUIRED_PART_FITS_AFTER_TRIM`, `NOT_SELECTED_BY_CANDIDATE_SELECTION`, `NOT_NEEDED`
+
+`reason_code`はJSONへコード値を保存する。`NOT_SELECTED_BY_CANDIDATE_SELECTION`は画面とHTMLで「候補選別の結果、使用しない計画が選ばれたため未使用」と表示する。
 - `optimality`: `best_among_generated_candidates`
 
 ## 6. 保存情報との境界

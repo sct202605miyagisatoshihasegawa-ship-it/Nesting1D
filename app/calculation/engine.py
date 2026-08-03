@@ -2,6 +2,7 @@ from collections import Counter
 from .models import CalculationInput, CalculationResult
 from .patterns import key, order, changes
 from .rules import remaining_length, used_length, remainder_class
+from .selection import SelectionCandidate, select_candidate
 
 def _fill(length, needs, sequence, trim, kerf):
     space = length-trim-kerf; cuts=[]
@@ -13,6 +14,16 @@ def _fill(length, needs, sequence, trim, kerf):
         cuts += [size]*count; needs[size]-=count; space-=count*(size+kerf)
     return tuple(sorted(cuts, reverse=True))
 
+def _unused_remnant_reason(length, needs, trim, kerf):
+    if not sum(needs.values()):
+        return "NOT_NEEDED"
+    if not any(
+        quantity and trim + kerf + size + kerf <= length
+        for size, quantity in needs.items()
+    ):
+        return "NO_REQUIRED_PART_FITS_AFTER_TRIM"
+    return None
+
 def _plan(data, sequence, remnants=True):
     c=data.cutting_conditions; needs=Counter()
     for p in data.required_parts: needs[p.length_mm]+=p.quantity
@@ -20,13 +31,23 @@ def _plan(data, sequence, remnants=True):
         raise ValueError("新品母材から切り出せない部材があります")
     stocks=[]; unused=[]; inv_done=Counter()
     if data.inventory and not remnants:
-        unused=[{"source_type":"existing_remnant","length_mm":r.length_mm,"quantity":r.quantity,"reason_code":"NOT_SELECTED_TO_AVOID_EXTRA_PURCHASE"} for r in sorted(data.inventory.remnants,key=lambda x:x.length_mm)]
+        for r in sorted(data.inventory.remnants,key=lambda x:x.length_mm):
+            reason = _unused_remnant_reason(
+                r.length_mm, needs, c.left_trim_mm, c.kerf_mm
+            ) or "NOT_SELECTED_BY_CANDIDATE_SELECTION"
+            unused.append({"source_type":"existing_remnant","length_mm":r.length_mm,"quantity":r.quantity,"reason_code":reason})
     if data.inventory and remnants:
         for r in sorted(data.inventory.remnants,key=lambda x:x.length_mm):
             for index in range(r.quantity):
-                if not sum(needs.values()):
-                    unused.append({"source_type":"existing_remnant","length_mm":r.length_mm,"quantity":r.quantity-index,"reason_code":"NOT_NEEDED"})
+                reason = _unused_remnant_reason(
+                    r.length_mm, needs, c.left_trim_mm, c.kerf_mm
+                )
+                if reason == "NOT_NEEDED":
+                    unused.append({"source_type":"existing_remnant","length_mm":r.length_mm,"quantity":r.quantity-index,"reason_code":reason})
                     break
+                if reason:
+                    unused.append({"source_type":"existing_remnant","length_mm":r.length_mm,"quantity":1,"reason_code":reason})
+                    continue
                 cuts=_fill(r.length_mm,needs,sequence,c.left_trim_mm,c.kerf_mm)
                 if cuts: stocks.append(("existing_remnant",r.length_mm,cuts))
                 else: unused.append({"source_type":"existing_remnant","length_mm":r.length_mm,"quantity":1,"reason_code":"NO_REQUIRED_PART_FITS_AFTER_TRIM"})
@@ -43,23 +64,80 @@ def _plan(data, sequence, remnants=True):
         stocks.append(("additional_new_stock",c.new_stock_length_mm,cuts))
     return stocks,unused,inv_done
 
+def _build_selection_candidate(data: CalculationInput, plan) -> SelectionCandidate:
+    raw_stocks, raw_unused, raw_inventory_completed = plan
+    conditions = data.cutting_conditions
+    stocks = []
+    completed = Counter()
+    waste_length_mm = 0
+    remnant_length_mm = 0
+    remnant_count = 0
+
+    for source_type, original_length_mm, raw_cuts in raw_stocks:
+        cuts = tuple(raw_cuts)
+        remaining = remaining_length(
+            original_length_mm,
+            cuts,
+            conditions.left_trim_mm,
+            conditions.kerf_mm,
+        )
+        classification = remainder_class(remaining, conditions.kerf_mm)
+        if classification == "scrap":
+            waste_length_mm += remaining
+        elif classification == "remnant":
+            remnant_length_mm += remaining
+            remnant_count += 1
+        stocks.append((source_type, original_length_mm, cuts, remaining))
+        completed.update(cuts)
+
+    requested = Counter()
+    for part in data.required_parts:
+        requested[part.length_mm] += part.quantity
+    pattern_keys = tuple(key(stock[2]) for stock in stocks)
+
+    return SelectionCandidate(
+        stocks=tuple(stocks),
+        unused=tuple(dict(item) for item in raw_unused),
+        inventory_completed=tuple(
+            sorted(raw_inventory_completed.items(), reverse=True)
+        ),
+        fully_satisfied=all(
+            completed[length_mm] >= quantity
+            for length_mm, quantity in requested.items()
+        ),
+        additional_new_stock_count=sum(
+            stock[0] == "additional_new_stock" for stock in stocks
+        ),
+        waste_length_mm=waste_length_mm,
+        remnant_length_mm=remnant_length_mm,
+        remnant_count=remnant_count,
+        pattern_count=len(set(pattern_keys)),
+        dimension_change_count=changes(order(pattern_keys)),
+    )
+
+def _build_selection_candidates(
+    data: CalculationInput,
+) -> tuple[SelectionCandidate, ...]:
+    sizes = tuple(
+        sorted({part.length_mm for part in data.required_parts}, reverse=True)
+    )
+    sequences = (sizes, tuple(reversed(sizes)))
+    remnant_options = (True, False) if data.inventory else (False,)
+    return tuple(
+        _build_selection_candidate(data, _plan(data, sequence, use_remnants))
+        for sequence in sequences
+        for use_remnants in remnant_options
+    )
+
 def calculate(data: CalculationInput):
-    sizes=tuple(sorted({p.length_mm for p in data.required_parts},reverse=True)); candidates=[]
-    for seq in (sizes,tuple(reversed(sizes))):
-        for use in ((True,False) if data.inventory else (False,)):
-            plan=_plan(data,seq,use); stocks=plan[0]; ks=order(key(x[2]) for x in stocks)
-            if data.inventory:
-                c=data.cutting_conditions
-                remnant_stocks=[x for x in stocks if x[0]=="existing_remnant"]
-                remnant_cut_length=sum(sum(x[2]) for x in remnant_stocks)
-                remnant_left=sum(remaining_length(x[1],x[2],c.left_trim_mm,c.kerf_mm) for x in remnant_stocks)
-                new_left=sorted((remaining_length(x[1],x[2],c.left_trim_mm,c.kerf_mm) for x in stocks if x[0]!="existing_remnant"),reverse=True)
-                positive_new_left=[x for x in new_left if x>0]
-                score=(sum(x[0]=="additional_new_stock" for x in stocks),-len(remnant_stocks),-remnant_cut_length,remnant_left,len(positive_new_left),tuple(-x for x in positive_new_left),len(set(key(x[2]) for x in stocks)),changes(ks),tuple(stocks))
-            else:
-                score=(len(stocks),len(set(key(x[2]) for x in stocks)),changes(ks),tuple(stocks))
-            candidates.append((score,plan))
-    stocks,unused,inv_done=min(candidates,key=lambda x:x[0])[1]; ks=order(key(x[2]) for x in stocks); ids={k:f"P{i:02}" for i,k in enumerate(ks,1)}; counts=Counter(key(x[2]) for x in stocks); c=data.cutting_conditions
-    usage=[{"source_type":t,"original_length_mm":s,"cuts":list(cuts),"pattern_id":ids[key(cuts)],"used_length_mm":used_length(cuts,c.left_trim_mm,c.kerf_mm),"remaining_length_mm":remaining_length(s,cuts,c.left_trim_mm,c.kerf_mm),"remainder_class":remainder_class(remaining_length(s,cuts,c.left_trim_mm,c.kerf_mm),c.kerf_mm)} for t,s,cuts in stocks]
+    selected = select_candidate(_build_selection_candidates(data))
+    stocks = tuple(
+        (source_type, original_length_mm, cuts)
+        for source_type, original_length_mm, cuts, _ in selected.stocks
+    )
+    unused = [dict(item) for item in selected.unused]
+    inv_done = Counter(dict(selected.inventory_completed))
+    ks=order(key(x[2]) for x in stocks); ids={k:f"P{i:02}" for i,k in enumerate(ks,1)}; counts=Counter(key(x[2]) for x in stocks); c=data.cutting_conditions
+    usage=[{"source_type":t,"original_length_mm":s,"cuts":list(cuts),"pattern_id":ids[key(cuts)],"used_length_mm":used_length(cuts,c.left_trim_mm,c.kerf_mm),"remaining_length_mm":remaining,"remainder_class":remainder_class(remaining,c.kerf_mm)} for t,s,cuts,remaining in selected.stocks]
     requested=Counter(); [requested.update({p.length_mm:p.quantity}) for p in data.required_parts]
-    return CalculationResult(mode=data.mode,required_stock_quantity=len(stocks),additional_new_stock_required=sum(x[0]=="additional_new_stock" for x in stocks),existing_remnant_used=sum(x[0]=="existing_remnant" for x in stocks),inventory_new_stock_used=sum(x[0]=="inventory_new_stock" for x in stocks),patterns=[{"pattern_id":ids[k],"usage_count":counts[k],"parts":[{"length_mm":a,"quantity":b} for a,b in k]} for k in ks],stock_usage=usage,unused_inventory=unused,dimension_change_count=changes(ks),initial_setup_count=int(bool(ks)),machine_setting_count=int(bool(ks))+changes(ks),fulfillment=[{"length_mm":x,"required_quantity":q,"completed_from_inventory_quantity":inv_done[x],"completed_total_quantity":q,"shortage_before_purchase_quantity":q-inv_done[x],"shortage_after_purchase_quantity":0} for x,q in sorted(requested.items(),reverse=True)])
+    return CalculationResult(mode=data.mode,required_stock_quantity=len(stocks),additional_new_stock_required=selected.additional_new_stock_count,existing_remnant_used=sum(x[0]=="existing_remnant" for x in stocks),inventory_new_stock_used=sum(x[0]=="inventory_new_stock" for x in stocks),patterns=[{"pattern_id":ids[k],"usage_count":counts[k],"parts":[{"length_mm":a,"quantity":b} for a,b in k]} for k in ks],stock_usage=usage,unused_inventory=unused,dimension_change_count=selected.dimension_change_count,initial_setup_count=int(bool(ks)),machine_setting_count=int(bool(ks))+selected.dimension_change_count,fulfillment=[{"length_mm":x,"required_quantity":q,"completed_from_inventory_quantity":inv_done[x],"completed_total_quantity":q,"shortage_before_purchase_quantity":q-inv_done[x],"shortage_after_purchase_quantity":0} for x,q in sorted(requested.items(),reverse=True)])

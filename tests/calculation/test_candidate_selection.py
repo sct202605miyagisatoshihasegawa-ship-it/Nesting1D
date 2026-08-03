@@ -7,6 +7,7 @@ from app.calculation.selection import (
     DEFAULT_WASTE_TOLERANCE_MM,
     NoFullySatisfiedCandidateError,
     SelectionCandidate,
+    build_stable_tie_break_key,
     select_candidate,
 )
 
@@ -21,10 +22,19 @@ def candidate(
     remnant_count: int = 0,
     patterns: int = 1,
     changes: int = 0,
+    stocks=None,
+    unused=None,
 ) -> SelectionCandidate:
     return SelectionCandidate(
-        stocks=((name, 1000, (500,)),),
-        unused=((name, "unused"),),
+        stocks=stocks or ((name, 1000, (500,), 500),),
+        unused=unused or (
+            {
+                "source_type": "existing_remnant",
+                "length_mm": 600,
+                "quantity": 1,
+                "reason_code": "NOT_NEEDED",
+            },
+        ),
         inventory_completed=((500, 1),),
         fully_satisfied=fully_satisfied,
         additional_new_stock_count=purchases,
@@ -33,8 +43,96 @@ def candidate(
         remnant_count=remnant_count,
         pattern_count=patterns,
         dimension_change_count=changes,
-        stable_tie_break_key=(name,),
     )
+
+
+def test_same_candidate_content_always_builds_same_stable_key():
+    assert candidate("a").stable_tie_break_key == candidate("a").stable_tie_break_key
+
+
+def test_unused_dictionary_key_order_does_not_change_stable_key():
+    first = {"source_type": "existing_remnant", "length_mm": 600, "quantity": 2, "reason_code": "NOT_NEEDED"}
+    second = {"reason_code": "NOT_NEEDED", "quantity": 2, "length_mm": 600, "source_type": "existing_remnant"}
+    assert candidate("a", unused=(first,)).stable_tie_break_key == candidate("a", unused=(second,)).stable_tie_break_key
+
+
+def test_unused_registration_order_does_not_change_stable_key():
+    first = {"source_type": "existing_remnant", "length_mm": 600, "quantity": 1}
+    second = {"source_type": "held_new_stock", "length_mm": 1000, "quantity": 2}
+    assert candidate("a", unused=(first, second)).stable_tie_break_key == candidate("a", unused=(second, first)).stable_tie_break_key
+
+
+def test_unused_reason_code_is_excluded_from_stable_key():
+    first = {"source_type": "existing_remnant", "length_mm": 600, "quantity": 1, "reason_code": "NOT_NEEDED"}
+    second = first | {"reason_code": "NOT_SELECTED_BY_CANDIDATE_SELECTION"}
+    assert candidate("a", unused=(first,)).stable_tie_break_key == candidate("a", unused=(second,)).stable_tie_break_key
+
+
+@pytest.mark.parametrize(
+    ("first_stock", "second_stock"),
+    [
+        (("existing_remnant", 600, (500,), 100), ("existing_remnant", 700, (500,), 200)),
+        (("existing_remnant", 600, (500,), 100), ("existing_remnant", 600, (400,), 200)),
+        (("existing_remnant", 600, (400, 200), 0), ("existing_remnant", 600, (200, 400), 0)),
+        (("existing_remnant", 600, (500,), 100), ("existing_remnant", 600, (500,), 99)),
+    ],
+)
+def test_used_stock_content_changes_stable_key(first_stock, second_stock):
+    assert candidate("a", stocks=(first_stock,)).stable_tie_break_key != candidate("a", stocks=(second_stock,)).stable_tie_break_key
+
+
+def test_used_stock_order_is_preserved_in_stable_key():
+    first = ("existing_remnant", 600, (500,), 100)
+    second = ("inventory_new_stock", 1000, (500,), 500)
+    assert candidate("a", stocks=(first, second)).stable_tie_break_key != candidate("a", stocks=(second, first)).stable_tie_break_key
+
+
+@pytest.mark.parametrize(
+    ("first_unused", "second_unused"),
+    [
+        ({"source_type": "existing_remnant", "length_mm": 600, "quantity": 1}, {"source_type": "existing_remnant", "length_mm": 700, "quantity": 1}),
+        ({"source_type": "existing_remnant", "length_mm": 600, "quantity": 1}, {"source_type": "existing_remnant", "length_mm": 600, "quantity": 2}),
+    ],
+)
+def test_unused_material_content_changes_stable_key(first_unused, second_unused):
+    assert candidate("a", unused=(first_unused,)).stable_tie_break_key != candidate("a", unused=(second_unused,)).stable_tie_break_key
+
+
+def test_building_stable_key_does_not_mutate_source_data():
+    stocks = [["existing_remnant", 600, [400, 200], 0]]
+    unused = [{"quantity": 1, "length_mm": 600, "source_type": "existing_remnant", "reason_code": "NOT_NEEDED"}]
+    before_stocks = deepcopy(stocks)
+    before_unused = deepcopy(unused)
+    key = build_stable_tie_break_key(stocks, unused)
+    assert key == candidate("a", stocks=stocks, unused=unused).stable_tie_break_key
+    assert stocks == before_stocks
+    assert unused == before_unused
+
+
+def test_stable_key_snapshot_does_not_change_after_source_mutation():
+    stocks = [["existing_remnant", 600, [500], 100]]
+    unused = [{"source_type": "existing_remnant", "length_mm": 600, "quantity": 1}]
+    planned = candidate("a", stocks=stocks, unused=unused)
+    original_key = planned.stable_tie_break_key
+    stocks[0][2].append(50)
+    unused[0]["quantity"] = 2
+    assert planned.stable_tie_break_key == original_key
+
+
+def test_real_stable_key_selects_same_candidate_regardless_of_input_order():
+    first = candidate("existing_remnant")
+    second = candidate("inventory_new_stock")
+    assert select_candidate([second, first]) is first
+    assert select_candidate([first, second]) is first
+
+
+def test_reason_code_does_not_override_plan_content_in_selection():
+    preferred_unused = {"source_type": "existing_remnant", "length_mm": 600, "quantity": 1, "reason_code": "ZZZ"}
+    other_unused = preferred_unused | {"reason_code": "AAA"}
+    preferred = candidate("a", unused=(preferred_unused,))
+    other = candidate("b", unused=(other_unused,))
+    assert select_candidate([other, preferred]) is preferred
+    assert select_candidate([preferred, other]) is preferred
 
 
 def test_unsatisfied_candidate_is_excluded():

@@ -114,7 +114,7 @@ def _display_result(result,form:dict)->dict:
     state_labels={"remnant":"残材","scrap":"廃棄材","used_up":"使い切り"}
     reason_labels={
         "NO_REQUIRED_PART_FITS_AFTER_TRIM":"左端を捨て切りした後の長さでは、必要な部材を1本も切り出せないため未使用",
-        "NOT_SELECTED_TO_AVOID_EXTRA_PURCHASE":"使用すると追加購入する新品母材が増えるため未使用",
+        "NOT_SELECTED_BY_CANDIDATE_SELECTION":"候補選別の結果、使用しない計画が選ばれたため未使用",
         "NOT_NEEDED":"必要部材をすべて確保できたため未使用",
     }
     usages=[]

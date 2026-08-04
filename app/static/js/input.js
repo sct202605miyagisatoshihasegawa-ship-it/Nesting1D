@@ -166,7 +166,8 @@ async function saveRecord(overwrite = false) {
         jsonButton.disabled = false;
         htmlButton.disabled = false;
         setDirty(false);
-        messageDisplay.textContent = "正式保存が完了しました。";
+        downloadJson();
+        messageDisplay.textContent = "正式保存が完了し、JSONをダウンロードしました。";
         return true;
     } catch (error) {
         setDirty(true);
@@ -257,7 +258,11 @@ resetButton.addEventListener("click", () => protectedAction(() => {
     setDirty(false);
     window.location.assign("/");
 }));
-jsonButton.addEventListener("click", () => { if (managementNumber) window.location.assign(`/download/${managementNumber}.json`); });
+function downloadJson() {
+    if (managementNumber) window.location.assign(`/download/${managementNumber}.json`);
+}
+
+jsonButton.addEventListener("click", downloadJson);
 htmlButton.addEventListener("click", () => { if (managementNumber) window.location.assign(`/download/${managementNumber}.html`); });
 window.addEventListener("beforeunload", (event) => {
     if (dirty && !suppressBeforeUnload) {

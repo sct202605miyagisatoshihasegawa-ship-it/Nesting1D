@@ -165,9 +165,15 @@ def test_html_contains_required_sections_escapes_and_does_not_mutate():
     html = render_report(main_module.templates, record, view)
     assert '<meta charset="UTF-8">' in html and "<style>" in html
     assert "cdn" not in html.lower() and "http://" not in html and "https://" not in html
-    for text in ("件名", "計算条件", "必要部材一覧", "在庫情報", "ダッシュボード概要", "パターン一覧", "母材一覧", "切断手順", "残材・廃棄材・使い切り", "未使用在庫と理由"):
+    for text in ("件名", "計算条件", "必要部材一覧", "在庫情報", "ダッシュボード概要", "パターン一覧", "使用材料一覧", "切断手順", "残材・廃棄材・使い切り", "未使用在庫と理由"):
         assert text in html
     assert "使い切り" in html and "左端を捨て切り" in html
+    for text in ("在庫新品材", "在庫残材", "使用材料数", "使用材料一覧", "切出し部材"):
+        assert text in html
+    assert "廃棄判定基準 固定50mm（鋸刃厚に依存しない）" in html
+    assert "50mm＋鋸刃厚" not in html
+    assert "在庫残材600mmを1本用意" in html
+    assert "切断時に鋸刃厚0mmを1回消費" in html
     assert "&lt;script&gt;" in html and '<script>alert("x")</script>' not in html
     assert record == before
 
@@ -191,6 +197,22 @@ def test_web_save_load_download_and_template_lists(web_storage):
     assert number in client.get("/").text
     form = {"mode":"required_stock","title":"","material_type":"","author":"","notes":"","new_stock_length_mm":"1030","kerf_mm":"5","left_trim_mm":"10","new_stock_quantity":"0","part_length":"500","part_quantity":"2","remnant_length":"","remnant_quantity":""}
     assert number in client.post("/", data=form).text
+
+
+def test_json_and_html_downloads_match_saved_record(web_storage):
+    client, _ = web_storage
+    saved = client.post("/api/save", json={"input": saved_input()})
+    number = saved.json()["management_number"]
+    json_download = client.get(f"/download/{number}.json")
+    html_download = client.get(f"/download/{number}.html")
+    assert json_download.status_code == html_download.status_code == 200
+    assert json_download.headers["content-disposition"] == f'attachment; filename="{number}.json"'
+    assert html_download.headers["content-disposition"] == f'attachment; filename="{number}.html"'
+    record = json_download.json()
+    assert record["management_number"] == number
+    assert set(("mode", "metadata", "cutting_conditions", "required_parts")) <= record["input"].keys()
+    assert "使用材料一覧" in html_download.text
+    assert "廃棄判定基準 固定50mm（鋸刃厚に依存しない）" in html_download.text
 
 
 def test_web_overwrite_confirmation_and_number_stability(web_storage):
@@ -242,7 +264,7 @@ def test_javascript_and_css_checkpoint5_contracts():
 def test_five_tabs_and_initial_selection_contract():
     javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
     template = Path("app/templates/index.html").read_text(encoding="utf-8")
-    for label in ("入力条件・計算条件", "ダッシュボード", "パターン一覧", "母材一覧", "切断手順"):
+    for label in ("入力条件・計算条件", "ダッシュボード", "パターン一覧", "使用材料一覧", "切断手順"):
         assert label in template
     assert template.count('data-result-view=') == 5
     assert "data-has-result=\"{{ 'true' if result else 'false' }}\"" in template
@@ -255,6 +277,22 @@ def test_five_tabs_and_initial_selection_contract():
     assert "let dirty = hasResult" in javascript
     for panel_id in ("dashboard-view", "patterns-view", "stocks-view", "instructions-view"):
         assert f'id="{panel_id}"' in template
+
+
+def test_successful_save_downloads_json_only_after_api_success():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    save_start = javascript.index("async function saveRecord")
+    save_end = javascript.index("function replaceRows", save_start)
+    save_handler = javascript[save_start:save_end]
+    success_check = save_handler.index("if (!response.ok || !data.ok)")
+    assign_number = save_handler.index("managementNumber = data.management_number")
+    download = save_handler.index("downloadJson()")
+    assert success_check < assign_number < download
+    assert 'body: JSON.stringify({input: formInput(), management_number: managementNumber, overwrite})' in save_handler
+    assert 'if (data.confirm_overwrite && window.confirm(data.message))' in save_handler
+    assert 'return await saveRecord(true)' in save_handler
+    assert 'window.location.assign(`/download/${managementNumber}.json`)' in javascript
+    assert 'jsonButton.addEventListener("click", downloadJson)' in javascript
 
 
 def test_stage5_dirty_save_load_and_reset_contract():
@@ -273,8 +311,34 @@ def test_stage5_dirty_save_load_and_reset_contract():
     assert 'window.location.assign("/")' in javascript
     assert 'const newButton' not in javascript and 'id="new-record"' not in template
     assert '<details class="other-actions">' in template
-    for control_id in ("load-record", "download-json", "download-html"):
-        assert f'id="{control_id}"' in template
+    assert 'id="load-record"' in template
+    management_start = template.index('id="management-actions-heading"')
+    management_end = template.index('class="card common-information"')
+    management_panel = template[management_start:management_end]
+    for control_id in ("download-json", "download-html"):
+        assert f'id="{control_id}"' in management_panel
+
+
+def test_management_download_buttons_have_responsive_single_line_layout():
+    css = Path("app/static/css/style.css").read_text(encoding="utf-8")
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
+    assert ".file-actions button { min-width: 0; white-space: nowrap; }" in css
+    assert ".file-actions { grid-template-columns: 1fr; }" in css
+
+
+def test_add_row_buttons_follow_their_dynamic_rows_and_mobile_text_contract():
+    template = Path("app/templates/index.html").read_text(encoding="utf-8")
+    css = Path("app/static/css/style.css").read_text(encoding="utf-8")
+    part_rows = template.index('id="part-rows"')
+    part_button = template.index('data-add="part-rows"')
+    remnant_rows = template.index('id="remnant-rows"')
+    remnant_button = template.index('data-add="remnant-rows"')
+    assert part_rows < part_button < remnant_rows < remnant_button
+    assert template.count('class="row-actions"') == template.count('data-add=') == 2
+    assert ".row-actions .secondary{width:100%}" in css
+    assert ".measurement{white-space:nowrap}" in css
+    assert "overflow-wrap:anywhere" in css
+    assert "body{font-size:16px}" in css
 
 
 def test_inventory_mode_reorders_only_input_sections():

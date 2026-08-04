@@ -41,6 +41,8 @@
 body {
     min-height: 100vh;
     margin: 0;
+    font-size: 17px;
+    line-height: 1.6;
     background:
         radial-gradient(
             circle at top right,
@@ -160,13 +162,13 @@ h1 {
 }
 .calculator,.rows{display:grid;gap:20px}.card{margin-top:24px;padding:24px;border:1px solid #35424c;border-radius:16px;background:rgb(27 34 40/85%)}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.wide{grid-column:1/-1}
-label{display:grid;gap:7px;color:#c9d2d9;font-weight:600}input,textarea{width:100%;padding:11px;border:1px solid #51606b;border-radius:8px;color:#eef3f6;background:#11181d;font:inherit}textarea{min-height:80px;resize:vertical}
+label{display:grid;gap:7px;color:#c9d2d9;font-weight:600}input,textarea{width:100%;padding:12px;border:1px solid #51606b;border-radius:8px;color:#eef3f6;background:#11181d;font:inherit;font-size:1rem}textarea{min-height:80px;resize:vertical}
 .mode-options,.section-head,.input-row{display:flex;gap:14px;align-items:end}.mode-options label{display:flex;align-items:center}.mode-options input{width:auto}.section-head{justify-content:space-between;align-items:center}.section-head h2,.section-head h3{margin:0}
-.input-row{padding:14px;border:1px solid #35424c;border-radius:10px}.input-row label{flex:1}.secondary,.remove,.calculate-button{padding:10px 16px;border:0;border-radius:8px;font:inherit;font-weight:700;cursor:pointer}.secondary{background:#35424c;color:#eef3f6}.remove{background:#5a3030;color:#fff}.calculate-button{margin-top:24px;background:#74c7a3;color:#102018;font-size:1.05rem}.calculate-button:disabled{cursor:wait;opacity:.65}
+.input-row{padding:14px;border:1px solid #35424c;border-radius:10px}.input-row label{flex:1}.secondary,.remove,.calculate-button{min-height:46px;padding:11px 17px;border:0;border-radius:8px;font:inherit;font-size:1rem;font-weight:700;cursor:pointer}.secondary{background:#35424c;color:#eef3f6}.remove{background:#5a3030;color:#fff}.calculate-button{margin-top:24px;background:#74c7a3;color:#102018;font-size:1.1rem}.calculate-button:disabled{cursor:wait;opacity:.65}.row-actions{display:flex;justify-content:flex-end;margin-top:14px}
 .error-box{margin-top:24px;padding:18px;border:1px solid #e48b8b;border-radius:12px;background:#3b2020}.error-box h2{margin-top:0}.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.summary-grid div{display:grid;gap:6px;padding:16px;border-radius:10px;background:#11181d}.summary-grid strong{font-size:1.8rem;color:#74c7a3}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #35424c;text-align:left}
-.result-tabs{position:sticky;top:0;z-index:5;display:flex;gap:8px;margin-top:24px;padding:10px;overflow-x:auto;border:1px solid #35424c;border-radius:12px;background:#101418;scroll-margin-top:16px}.result-tabs button{flex:0 0 auto;padding:10px 14px;border:0;border-radius:8px;color:#e8edf2;background:#35424c;font:inherit;font-weight:700;cursor:pointer}.result-tabs button.active{color:#102018;background:#74c7a3}
-.dashboard-grid,.fulfillment-grid,.stock-grid,.card-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.dashboard-grid>div,.mini-card,.pattern-card,.stock-card,.instruction-card{padding:16px;border:1px solid #35424c;border-radius:12px;background:#11181d}.dashboard-grid>div{display:grid;gap:7px}.dashboard-grid span,.stock-card dt,.mini-card dt{color:#aeb9c2}.dashboard-grid strong{color:#74c7a3;font-size:1.45rem}.mini-card h4{margin-top:0}.mini-card dl,.stock-card dl{margin:0}.mini-card dl div,.stock-card dl div{display:grid;grid-template-columns:95px 1fr;gap:8px;padding:5px 0}.mini-card dd,.stock-card dd{margin:0}.pattern-card header,.stock-card header{display:flex;justify-content:space-between;gap:12px;align-items:center}.pattern-card h3{margin:0}.cut-chip{display:inline-block;margin:4px;padding:6px 9px;border-radius:999px;background:#263641}.material-results{color:#c9d2d9}.inventory-summary{display:flex;flex-wrap:wrap;gap:10px}.inventory-summary p{margin:0;padding:10px;border-radius:8px;background:#11181d}.unused-inventory p{margin-bottom:0}.field-mode{border-color:#74c7a3}.field-note{padding:12px;border-left:4px solid #74c7a3;background:#16261f}.instruction-list{display:grid;gap:16px;padding-left:0;list-style:none}.instruction-card h3{color:#74c7a3}.instruction-card p{font-size:1.05rem}.finish-state{padding-top:10px;border-top:1px solid #35424c;font-weight:700}
-@media(max-width:700px){.hero-grid,.grid,.grid.three,.fixed-rules dl,.summary-grid,.dashboard-grid,.fulfillment-grid,.stock-grid,.card-list{grid-template-columns:1fr}.hero-grid{gap:20px}.input-row{align-items:stretch;flex-direction:column}.remove{align-self:start}.container{width:min(100% - 24px,960px);padding:32px 0}.card{padding:18px}.result-tabs{margin-inline:-4px}.pattern-card header,.stock-card header{align-items:flex-start;flex-direction:column}.instruction-card p{font-size:1rem}}
+.result-tabs{position:sticky;top:0;z-index:5;display:flex;gap:8px;margin-top:24px;padding:10px;overflow-x:auto;border:1px solid #35424c;border-radius:12px;background:#101418;scroll-margin-top:16px}.result-tabs button{flex:1 1 auto;min-width:max-content;padding:11px 14px;border:0;border-radius:8px;color:#e8edf2;background:#35424c;font:inherit;font-size:1rem;font-weight:700;cursor:pointer}.result-tabs button.active{color:#102018;background:#74c7a3}
+.dashboard-grid,.fulfillment-grid,.stock-grid,.card-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.dashboard-grid>div,.mini-card,.pattern-card,.stock-card,.instruction-card{padding:16px;border:1px solid #35424c;border-radius:12px;background:#11181d}.dashboard-grid>div{display:grid;gap:7px}.dashboard-grid span,.stock-card dt,.mini-card dt{color:#aeb9c2}.dashboard-grid strong{color:#74c7a3;font-size:1.5rem}.mini-card h4{margin-top:0}.mini-card dl,.stock-card dl{margin:0}.mini-card dl div,.stock-card dl div{display:grid;grid-template-columns:105px minmax(0,1fr);gap:8px;padding:5px 0}.mini-card dd,.stock-card dd{margin:0;overflow-wrap:anywhere}.pattern-card header,.stock-card header{display:flex;justify-content:space-between;gap:12px;align-items:center}.pattern-card h3{margin:0}.stock-card header strong,.measurement{white-space:nowrap}.cut-chip{display:inline-block;margin:4px;padding:6px 9px;border-radius:999px;background:#263641;white-space:nowrap}.material-results{color:#c9d2d9}.inventory-summary{display:flex;flex-wrap:wrap;gap:10px}.inventory-summary p{margin:0;padding:10px;border-radius:8px;background:#11181d}.unused-inventory p{margin-bottom:0;font-size:1rem;line-height:1.6}.field-mode{border-color:#74c7a3}.field-note{padding:12px;border-left:4px solid #74c7a3;background:#16261f}.instruction-list{display:grid;gap:16px;padding-left:0;list-style:none}.instruction-card h3{color:#74c7a3}.instruction-card p{font-size:1.08rem;line-height:1.7}.instruction-material{margin-top:16px;padding:14px;border-left:3px solid var(--color-border-strong);background:var(--color-card-muted)}.instruction-material h4{margin:0 0 10px;font-size:1.08rem}.finish-state{padding-top:10px;border-top:1px solid #35424c;font-weight:700}
+@media(max-width:700px){body{font-size:16px}.hero-grid,.grid,.grid.three,.fixed-rules dl,.summary-grid,.dashboard-grid,.fulfillment-grid,.stock-grid,.card-list{grid-template-columns:1fr}.hero-grid{gap:20px}.input-row{align-items:stretch;flex-direction:column}.remove{align-self:start}.container{width:min(100% - 24px,960px);padding:32px 0}.card{padding:18px}.result-tabs{margin-inline:-4px}.result-tabs button{flex:0 0 auto}.pattern-card header,.stock-card header{align-items:flex-start;flex-direction:column}.instruction-card p{font-size:1rem}.row-actions .secondary{width:100%}}
 
 .status-ok {
     color: #74c7a3;
@@ -191,9 +193,9 @@ label{display:grid;gap:7px;color:#c9d2d9;font-weight:600}input,textarea{width:10
     align-items: end;
 }
 .file-actions {
-    display: flex;
+    display: grid;
     grid-column: 1 / -1;
-    flex-wrap: wrap;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
 }
 .management-heading {
@@ -234,6 +236,7 @@ dialog button {
     font-weight: 700;
     cursor: pointer;
 }
+.file-actions button { min-width: 0; white-space: nowrap; }
 .file-actions button:disabled { cursor: not-allowed; opacity: .5; }
 .saved { color: #74c7a3; }
 .unsaved, #file-message { color: #ffbd7a; }
@@ -331,7 +334,7 @@ label .field-error-input:focus-visible {
 @media (max-width: 600px) {
     .file-toolbar { grid-template-columns: 1fr; }
     .management-heading { align-items: flex-start; flex-direction: column; }
-    .file-actions { display: grid; grid-template-columns: 1fr 1fr; }
+    .file-actions { grid-template-columns: 1fr; }
     .file-actions button, .file-toolbar > button, .other-actions button { width: 100%; }
     .other-actions-content { display: grid; grid-template-columns: 1fr; }
 }

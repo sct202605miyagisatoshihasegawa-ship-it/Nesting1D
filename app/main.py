@@ -106,16 +106,16 @@ def _input_snapshot(mode:str,stock:int,kerf:int,trim:int,parts:list[dict[str,int
 
 def _display_result(result,form:dict)->dict:
     source_labels={
-        "existing_remnant":"既存残材",
-        "inventory_new_stock":"保有新品母材",
-        "held_new_stock":"保有新品母材",
-        "additional_new_stock":"追加購入新品母材",
+        "existing_remnant":"在庫残材",
+        "inventory_new_stock":"在庫新品材",
+        "held_new_stock":"在庫新品材",
+        "additional_new_stock":"購入新品材",
     }
-    state_labels={"remnant":"残材","scrap":"廃棄材","used_up":"使い切り"}
+    state_labels={"remnant":"発生残材","scrap":"廃棄材","used_up":"使い切り"}
     reason_labels={
         "NO_REQUIRED_PART_FITS_AFTER_TRIM":"左端を捨て切りした後の長さでは、必要な部材を1本も切り出せないため未使用",
         "NOT_SELECTED_BY_CANDIDATE_SELECTION":"候補選別の結果、使用しない計画が選ばれたため未使用",
-        "NOT_NEEDED":"必要部材をすべて確保できたため未使用",
+        "NOT_NEEDED":"必要部材がすべて確保され、この在庫材料を使用する必要がないため",
     }
     usages=[]
     for number,usage in enumerate(result.stock_usage,1):
@@ -128,6 +128,14 @@ def _display_result(result,form:dict)->dict:
     for pattern in result.patterns:
         item=dict(pattern)
         item["materials"]=[usage for usage in usages if usage["pattern_id"]==item["pattern_id"]]
+        material_groups=[]
+        for material in item["materials"]:
+            group=next((group for group in material_groups if group["source_type"]==material["source_type"] and group["original_length_mm"]==material["original_length_mm"]),None)
+            if group is None:
+                group={"source_type":material["source_type"],"source_label":material["source_label"],"original_length_mm":material["original_length_mm"],"quantity":0}
+                material_groups.append(group)
+            group["quantity"]+=1
+        item["material_groups"]=material_groups
         patterns.append(item)
     unused=[]
     for inventory in result.unused_inventory:
@@ -167,8 +175,8 @@ async def calculate_from_form(request:Request)->HTMLResponse:
         if form["part_quantities"] and not form["part_quantities"][0].strip(): _add_field_error(field_errors,"part_quantity_0","必要本数を入力してください。")
     inventory=None
     if mode=="inventory":
-        held=_integer(form["new_stock_quantity"],"保有新品母材本数",0,100_000,errors,field_errors,"new_stock_quantity","在庫本数")
-        remnants=_rows(form["remnant_lengths"],form["remnant_quantities"],"既存残材",errors,field_errors,"remnant_length","remnant_quantity","残材寸法","保有本数")
+        held=_integer(form["new_stock_quantity"],"在庫新品材本数",0,100_000,errors,field_errors,"new_stock_quantity","在庫本数")
+        remnants=_rows(form["remnant_lengths"],form["remnant_quantities"],"在庫残材",errors,field_errors,"remnant_length","remnant_quantity","残材寸法","保有本数")
         if held is not None: inventory={"new_stock_quantity":held,"remnants":remnants}
     if None not in (stock,kerf,trim):
         impossible=[]

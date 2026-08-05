@@ -74,5 +74,33 @@
 `reason_code`はJSONへコード値を保存する。`NOT_SELECTED_BY_CANDIDATE_SELECTION`は画面とHTMLで「候補選別の結果、使用しない計画が選ばれたため未使用」と表示する。
 - `optimality`: `best_among_generated_candidates`
 
-## 6. 保存情報との境界
-管理番号、作成・更新日時、保存先、同名確認は保存層の責務で、純粋な計算入力へ含めない。保存時刻は `Asia/Tokyo`、JSONとHTMLは同じ管理番号。
+## 6. 公開版V1の出力レコード
+管理番号、作成日時、更新日時は保存番号ではなく計算結果の識別情報であり、純粋な計算入力へ含めない。計算成功時にブラウザ状態へ設定し、JSON・HTMLの直接出力APIへ同じ値を渡す。
+
+```json
+{
+  "format_version": "1.0",
+  "app_version": "0.1.0",
+  "management_number": "NEST-20260805-103645-A7K2",
+  "created_at": "2026-08-05T10:36:45+09:00",
+  "updated_at": "2026-08-05T10:36:45+09:00",
+  "input": {
+    "mode": "required_stock",
+    "metadata": {"title": "", "material_type": "", "author": "", "notes": ""},
+    "cutting_conditions": {"new_stock_length_mm": 1000, "kerf_mm": 3, "left_trim_mm": 10},
+    "required_parts": [{"length_mm": 400, "quantity": 2}]
+  },
+  "calculation_result": {}
+}
+```
+
+- 新形式は `NEST-YYYYMMDD-HHMMSS-XXXX`。日時は `Asia/Tokyo` のオフセット付きISO 8601。
+- 旧形式 `NEST-YYYYMMDD-NNN` も `format_version: 1.0` の読込互換対象とする。
+- JSON内の`calculation_result`は読込時に画面結果として信用せず、`input`を現行エンジンで再計算する。
+
+## 7. 公開版V1のデータ経路
+- `POST /api/export/json`：レコードをメモリ生成し、JSONレスポンスとして直接返す。
+- `POST /api/export/html`：同じ識別情報・入力・再計算結果からHTMLをメモリ生成し、直接返す。
+- 両レスポンスはキャッシュ抑止し、サーバー上へ実ファイル・一時ファイルを作成しない。
+- 端末JSONはブラウザのFile APIで読み込み、ファイル本体をHTTP送信しない。
+- サーバー保存、保存履歴、上書き、管理番号検索、保存済みデータ再読込はスキーマ外かつ公開版V1非対応。

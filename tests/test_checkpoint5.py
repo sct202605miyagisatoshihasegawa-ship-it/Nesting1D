@@ -1,4 +1,3 @@
-import json
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -10,7 +9,14 @@ from fastapi.testclient import TestClient
 import app.main as main_module
 from app.calculation import CalculationInput, calculate
 from app.exporting import make_record, render_report
-from app.storage import APP_VERSION, FORMAT_VERSION, RecordStorage, StorageError, UnsupportedFormatError
+from app.records import (
+    APP_VERSION,
+    FORMAT_VERSION,
+    MANAGEMENT_NUMBER_ALPHABET,
+    RecordError,
+    generate_management_number,
+    validate_record,
+)
 
 TOKYO = ZoneInfo("Asia/Tokyo")
 FIXED_TIME = datetime(2026, 7, 26, 10, 20, 30, tzinfo=TOKYO)
@@ -48,101 +54,59 @@ def bare_record(number="NEST-20260726-001", title="日本語案件"):
     }
 
 
-@pytest.fixture
-def web_storage(tmp_path, monkeypatch):
-    storage = RecordStorage(tmp_path / "data", clock=lambda: FIXED_TIME)
-    monkeypatch.setattr(main_module, "storage", storage)
-    return TestClient(main_module.app), storage
+def direct_export_request(**updates):
+    request = {
+        "input": saved_input(),
+        "management_number": "NEST-20260805-103645-A7K2",
+        "created_at": "2026-08-05T10:36:45+09:00",
+        "updated_at": "2026-08-05T10:36:45+09:00",
+    }
+    request.update(updates)
+    return request
 
 
-def test_management_number_tokyo_format_and_maximum_with_gap(tmp_path):
-    storage = RecordStorage(tmp_path / "data", clock=lambda: FIXED_TIME)
-    storage.data_dir.mkdir()
-    (storage.data_dir / "NEST-20260726-001.json").write_text("{}", encoding="utf-8")
-    (storage.data_dir / "NEST-20260726-004.json").write_text("{}", encoding="utf-8")
-    assert storage.next_number() == "NEST-20260726-005"
-    utc_time = datetime(2026, 7, 25, 15, 30, tzinfo=ZoneInfo("UTC"))
-    assert storage.next_number(utc_time).startswith("NEST-20260726-")
+def test_new_management_number_uses_tokyo_time_and_unambiguous_secure_alphabet(monkeypatch):
+    choices = iter("A7K2")
+    monkeypatch.setattr("app.records.secrets.choice", lambda alphabet: next(choices))
+    utc_time = datetime(2026, 8, 5, 1, 36, 45, tzinfo=ZoneInfo("UTC"))
+    number = generate_management_number(utc_time)
+    assert number == "NEST-20260805-103645-A7K2"
+    assert set(number.rsplit("-", 1)[1]) <= set(MANAGEMENT_NUMBER_ALPHABET)
+    assert not set("IO01") & set(MANAGEMENT_NUMBER_ALPHABET)
 
 
-def test_new_save_writes_utf8_json_and_html_only_under_data(tmp_path):
-    storage = RecordStorage(tmp_path / "data", clock=lambda: FIXED_TIME)
-    record = storage.save_new(lambda number, now: (bare_record(number), f"<html>{number} 日本語</html>"))
-    number = record["management_number"]
-    json_path = storage.data_dir / f"{number}.json"
-    html_path = storage.data_dir / f"{number}.html"
-    assert number == "NEST-20260726-001"
-    assert json_path.exists() and html_path.exists()
-    assert "日本語案件" in json_path.read_text(encoding="utf-8")
-    assert number in html_path.read_text(encoding="utf-8")
-    assert list(tmp_path.glob("NEST-*")) == []
-    assert not list(storage.data_dir.glob("*.tmp"))
+@pytest.mark.parametrize(
+    "number",
+    ["NEST-20260805-103645-A7K2", "NEST-20260726-001"],
+)
+def test_record_validation_accepts_current_and_legacy_management_numbers(number):
+    assert validate_record(bare_record(number))["management_number"] == number
 
 
-def test_path_traversal_and_invalid_number_are_rejected(tmp_path):
-    storage = RecordStorage(tmp_path / "data")
-    for value in ("../outside", "NEST-20260726-001/../../x", "NEST-20260726-0001"):
-        with pytest.raises(StorageError):
-            storage.load(value)
+@pytest.mark.parametrize(
+    "number",
+    [
+        "NEST-20260805-103645-A7I2",
+        "NEST-20260805-103645-A7O2",
+        "NEST-20260805-103645-A702",
+        "NEST-20260805-103645-A712",
+        "NEST-20260805-103645-a7k2",
+        "NEST-20260805-103645-A7K",
+        "NEST-20260805-103645-A7K22",
+        "NEST-20260805-103645-Ａ7K2",
+    ],
+)
+def test_record_validation_rejects_invalid_current_management_numbers(number):
+    with pytest.raises(RecordError, match="管理番号"):
+        validate_record(bare_record(number))
 
 
-def test_existing_name_is_not_changed_without_overwrite(tmp_path):
-    storage = RecordStorage(tmp_path / "data", clock=lambda: FIXED_TIME)
-    storage.data_dir.mkdir()
-    existing = storage.data_dir / "NEST-20260726-001.json"
-    existing.write_text("original", encoding="utf-8")
-    record = storage.save_new(lambda number, now: (bare_record(number), "html"))
-    assert record["management_number"] == "NEST-20260726-002"
-    assert existing.read_text(encoding="utf-8") == "original"
-
-
-def test_overwrite_keeps_number_and_created_at(tmp_path):
-    storage = RecordStorage(tmp_path / "data", clock=lambda: FIXED_TIME)
-    original = storage.save_new(lambda number, now: (bare_record(number), "old html"))
-    updated = deepcopy(original)
-    updated["updated_at"] = "2026-07-26T11:00:00+09:00"
-    updated["input"]["metadata"]["title"] = "更新後"
-    storage.overwrite(updated, "new html")
-    loaded = storage.load(original["management_number"])
-    assert loaded["management_number"] == original["management_number"]
-    assert loaded["created_at"] == original["created_at"]
-    assert loaded["input"]["metadata"]["title"] == "更新後"
-
-
-def test_save_failure_restores_existing_files_and_removes_temps(tmp_path, monkeypatch):
-    storage = RecordStorage(tmp_path / "data", clock=lambda: FIXED_TIME)
-    original = storage.save_new(lambda number, now: (bare_record(number), "old html"))
-    number = original["management_number"]
-    json_path = storage.data_dir / f"{number}.json"
-    html_path = storage.data_dir / f"{number}.html"
-    before = (json_path.read_bytes(), html_path.read_bytes())
-    real_replace = __import__("os").replace
-    calls = 0
-    def fail_second(source, destination):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise OSError("simulated")
-        return real_replace(source, destination)
-    monkeypatch.setattr("app.storage.os.replace", fail_second)
-    changed = deepcopy(original)
-    changed["input"]["metadata"]["title"] = "壊してはいけない"
-    with pytest.raises(StorageError):
-        storage.overwrite(changed, "new html")
-    assert (json_path.read_bytes(), html_path.read_bytes()) == before
-    assert not list(storage.data_dir.glob("*.tmp"))
-
-
-def test_json_validation_invalid_and_unsupported(tmp_path):
-    storage = RecordStorage(tmp_path / "data")
-    storage.data_dir.mkdir()
-    invalid = storage.data_dir / "NEST-20260726-001.json"
-    invalid.write_text("{broken", encoding="utf-8")
-    with pytest.raises(StorageError):
-        storage.load(invalid.stem)
-    invalid.write_text(json.dumps(bare_record() | {"format_version": "9.9"}), encoding="utf-8")
-    with pytest.raises(UnsupportedFormatError, match="対応していません"):
-        storage.load(invalid.stem)
+@pytest.mark.parametrize("field", ["created_at", "updated_at"])
+def test_record_validation_rejects_invalid_tokyo_timestamps(field):
+    record = bare_record()
+    record[field] = "2026-07-26T10:20:30+00:00"
+    with pytest.raises(RecordError, match="日時"):
+        validate_record(record)
 
 
 def test_record_fields_and_recalculation_are_stable():
@@ -178,83 +142,91 @@ def test_html_contains_required_sections_escapes_and_does_not_mutate():
     assert record == before
 
 
-def test_web_save_load_download_and_template_lists(web_storage):
-    client, storage = web_storage
-    response = client.post("/api/save", json={"input": saved_input()})
+def test_direct_json_export_returns_memory_response_without_server_files():
+    client = TestClient(main_module.app)
+    number = "NEST-20260805-103645-A7K2"
+    response = client.post(
+        "/api/export/json",
+        json=direct_export_request(management_number=number),
+    )
     assert response.status_code == 200
-    number = response.json()["management_number"]
-    assert number == "NEST-20260726-001"
-    assert (storage.data_dir / f"{number}.json").exists()
-    assert (storage.data_dir / f"{number}.html").exists()
-    loaded = client.get(f"/api/records/{number}")
-    assert loaded.json()["record"]["input"]["metadata"]["title"] == "日本語案件"
-    assert loaded.json()["record"]["management_number"] == number
-    json_download = client.get(f"/download/{number}.json")
-    html_download = client.get(f"/download/{number}.html")
-    assert json_download.status_code == html_download.status_code == 200
-    assert "attachment" in json_download.headers["content-disposition"]
-    assert number in html_download.text
-    assert number in client.get("/").text
-    form = {"mode":"required_stock","title":"","material_type":"","author":"","notes":"","new_stock_length_mm":"1030","kerf_mm":"5","left_trim_mm":"10","new_stock_quantity":"0","part_length":"500","part_quantity":"2","remnant_length":"","remnant_quantity":""}
-    assert number in client.post("/", data=form).text
+    assert response.headers["content-disposition"] == f'attachment; filename="{number}.json"'
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json()["management_number"] == number
+    _, expected_result, _ = main_module._saved_input(saved_input())
+    assert response.json()["calculation_result"] == expected_result.model_dump()
 
 
-def test_json_and_html_downloads_match_saved_record(web_storage):
-    client, _ = web_storage
-    saved = client.post("/api/save", json={"input": saved_input()})
-    number = saved.json()["management_number"]
-    json_download = client.get(f"/download/{number}.json")
-    html_download = client.get(f"/download/{number}.html")
-    assert json_download.status_code == html_download.status_code == 200
-    assert json_download.headers["content-disposition"] == f'attachment; filename="{number}.json"'
-    assert html_download.headers["content-disposition"] == f'attachment; filename="{number}.html"'
-    record = json_download.json()
-    assert record["management_number"] == number
-    assert set(("mode", "metadata", "cutting_conditions", "required_parts")) <= record["input"].keys()
-    assert "使用材料一覧" in html_download.text
-    assert "廃棄判定基準 固定50mm（鋸刃厚に依存しない）" in html_download.text
-
-
-def test_web_overwrite_confirmation_and_number_stability(web_storage):
-    client, storage = web_storage
-    first = client.post("/api/save", json={"input": saved_input()}).json()
-    number = first["management_number"]
-    before = (storage.data_dir / f"{number}.json").read_bytes()
-    conflict = client.post("/api/save", json={"input": saved_input(title="変更"), "management_number": number})
-    assert conflict.status_code == 409 and conflict.json()["confirm_overwrite"]
-    assert (storage.data_dir / f"{number}.json").read_bytes() == before
-    overwritten = client.post("/api/save", json={"input": saved_input(title="変更"), "management_number": number, "overwrite": True})
-    assert overwritten.json()["management_number"] == number
-
-
-@pytest.mark.parametrize("number", ["NEST-20260726-999", "../secret", "bad"])
-def test_web_missing_or_invalid_number_has_no_internal_path(web_storage, number):
-    client, storage = web_storage
-    response = client.get(f"/api/records/{number}")
-    assert response.status_code in (400, 404)
-    assert str(storage.data_dir) not in response.text
-    assert "Traceback" not in response.text
-
-
-def test_web_save_error_is_handled_and_does_not_claim_success(web_storage, monkeypatch):
-    client, storage = web_storage
-    monkeypatch.setattr(storage, "save_new", lambda builder: (_ for _ in ()).throw(StorageError("/private/path")))
-    response = client.post("/api/save", json={"input": saved_input()})
+def test_direct_json_export_rejects_invalid_number_without_server_files():
+    client = TestClient(main_module.app)
+    response = client.post(
+        "/api/export/json",
+        json=direct_export_request(management_number="../../private"),
+    )
     assert response.status_code == 400
-    assert response.json()["ok"] is False
-    assert "/private/path" not in response.text
+    assert response.json() == {
+        "ok": False,
+        "message": "処理できませんでした。入力内容を確認してください。",
+    }
+
+
+def test_direct_html_export_is_independent_and_writes_no_server_files():
+    client = TestClient(main_module.app)
+    response = client.post("/api/export/html", json=direct_export_request())
+    number = "NEST-20260805-103645-A7K2"
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html; charset=utf-8")
+    assert response.headers["content-disposition"] == f'attachment; filename="{number}.html"'
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert number in response.text
+    assert "使用材料一覧" in response.text
+
+
+def test_json_and_html_direct_exports_share_the_complete_record(monkeypatch):
+    client = TestClient(main_module.app)
+    captured = {}
+    original_render = main_module.render_report
+
+    def capture_record(templates, record, view):
+        captured["record"] = record
+        return original_render(templates, record, view)
+
+    monkeypatch.setattr(main_module, "render_report", capture_record)
+    request = direct_export_request(input=saved_input(notes='<script>秘密</script>'))
+    json_response = client.post("/api/export/json", json=request)
+    html_response = client.post("/api/export/html", json=request)
+    assert json_response.status_code == html_response.status_code == 200
+    assert captured["record"] == json_response.json()
+    assert captured["record"]["management_number"] == request["management_number"]
+    assert captured["record"]["created_at"] == request["created_at"]
+    assert captured["record"]["updated_at"] == request["updated_at"]
+    assert captured["record"]["input"] == json_response.json()["input"]
+    assert captured["record"]["calculation_result"] == json_response.json()["calculation_result"]
+    assert "&lt;script&gt;秘密&lt;/script&gt;" in html_response.text
+    assert "<script>秘密</script>" not in html_response.text
+
+
+def test_direct_html_export_error_hides_input_and_internal_details():
+    client = TestClient(main_module.app)
+    response = client.post(
+        "/api/export/html",
+        json=direct_export_request(input=saved_input(notes="DO_NOT_EXPOSE"), created_at="not-a-timestamp"),
+    )
+    assert response.status_code == 400
+    assert "DO_NOT_EXPOSE" not in response.text
+    assert "Traceback" not in response.text
 
 
 def test_javascript_and_css_checkpoint5_contracts():
     javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
     css = Path("app/static/css/style.css").read_text(encoding="utf-8")
     template = Path("app/templates/index.html").read_text(encoding="utf-8")
-    assert 'fetch("/api/save"' in javascript
-    assert javascript.index("if (!response.ok") < javascript.index("setDirty(false)")
+    assert '/api/save' not in javascript
     assert "beforeunload" in javascript
-    for choice in ('choice === "save"', 'choice === "cancel"', 'value="discard"'):
+    for choice in ('choice === "cancel"', 'value="discard"'):
         assert choice in javascript or choice in template
-    assert "download-json" in javascript and "setDirty(false)" not in javascript[javascript.index("jsonButton.addEventListener"):]
+    assert "download-json" in javascript
     for existing in ("[data-add]", ".remove", "updateMode"):
         assert existing in javascript
     assert "@media (max-width: 600px)" in css and ".file-toolbar" in css
@@ -279,44 +251,68 @@ def test_five_tabs_and_initial_selection_contract():
         assert f'id="{panel_id}"' in template
 
 
-def test_successful_save_downloads_json_only_after_api_success():
+def test_json_export_state_changes_only_after_success_and_invalid_results_are_blocked():
     javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
-    save_start = javascript.index("async function saveRecord")
-    save_end = javascript.index("function replaceRows", save_start)
-    save_handler = javascript[save_start:save_end]
-    success_check = save_handler.index("if (!response.ok || !data.ok)")
-    assign_number = save_handler.index("managementNumber = data.management_number")
-    download = save_handler.index("downloadJson()")
-    assert success_check < assign_number < download
-    assert 'body: JSON.stringify({input: formInput(), management_number: managementNumber, overwrite})' in save_handler
-    assert 'if (data.confirm_overwrite && window.confirm(data.message))' in save_handler
-    assert 'return await saveRecord(true)' in save_handler
-    assert 'window.location.assign(`/download/${managementNumber}.json`)' in javascript
-    assert 'jsonButton.addEventListener("click", downloadJson)' in javascript
+    download_start = javascript.index("async function downloadJson")
+    download_end = javascript.index('jsonButton.addEventListener("click", downloadJson)', download_start)
+    download_handler = javascript[download_start:download_end]
+    success_check = download_handler.index("if (!response.ok)")
+    success_state = download_handler.index("jsonExported = true")
+    failure_state = download_handler.index("jsonExported = false")
+    assert success_check < success_state < failure_state
+    assert "!hasValidResult" in download_handler
+    assert "requiresManagementNumberReissue" in download_handler
+    assert "return false" in download_handler
 
 
-def test_stage5_dirty_save_load_and_reset_contract():
+def test_html_export_is_independent_and_changes_state_only_after_success():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    start = javascript.index("async function downloadHtml")
+    end = javascript.index('htmlButton.addEventListener("click", downloadHtml)', start)
+    handler = javascript[start:end]
+    assert 'fetch("/api/export/html"' in handler
+    assert "!hasValidResult" in handler
+    assert "requiresManagementNumberReissue" in handler
+    assert "const blob = await response.blob()" in handler
+    assert "URL.createObjectURL(blob)" in handler
+    assert "URL.revokeObjectURL(objectUrl)" in handler
+    assert handler.index("if (!response.ok)") < handler.index("htmlExported = true")
+    assert handler.index("htmlExported = true") < handler.index("htmlExported = false")
+    assert "jsonExported" not in handler
+    assert "return false" in handler
+
+
+def test_combined_output_status_and_shared_identity_state_are_present():
     javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
     template = Path("app/templates/index.html").read_text(encoding="utf-8")
-    assert "● 未保存の変更があります" in javascript
-    assert javascript.count("let dirty =") == 1
-    save_start = javascript.index("async function saveRecord")
-    save_end = javascript.index("function replaceRows", save_start)
-    assert "setDirty(false)" in javascript[save_start:save_end]
-    populate_start = javascript.index("function populate")
-    populate_end = javascript.index("async function loadSelected", populate_start)
-    assert "setDirty(false)" in javascript[populate_start:populate_end]
-    assert 'resetButton.addEventListener("click", () => protectedAction' in javascript
-    assert 'choice === "cancel"' in javascript
-    assert 'window.location.assign("/")' in javascript
-    assert 'const newButton' not in javascript and 'id="new-record"' not in template
-    assert '<details class="other-actions">' in template
-    assert 'id="load-record"' in template
-    management_start = template.index('id="management-actions-heading"')
-    management_end = template.index('class="card common-information"')
-    management_panel = template[management_start:management_end]
-    for control_id in ("download-json", "download-html"):
-        assert f'id="{control_id}"' in management_panel
+    assert "JSON・HTML出力済み" in javascript
+    assert "hasValidResult && jsonExported && htmlExported" in javascript
+    assert "const hasAnyExport = jsonExported || htmlExported" in javascript
+    for state_name in ("managementNumber", "createdAt", "updatedAt"):
+        assert f"let {state_name} =" in javascript
+    for input_id in ("result-management-number", "result-created-at", "result-updated-at"):
+        assert f'id="{input_id}"' in template
+
+
+def test_input_change_invalidates_result_and_requests_new_management_number():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    start = javascript.index("function invalidateCalculationResult")
+    end = javascript.index("function formInput", start)
+    handler = javascript[start:end]
+    for contract in (
+        "hasValidResult = false",
+        "jsonExported = false",
+        "htmlExported = false",
+        "requiresManagementNumberReissue = true",
+        'managementNumberStateInput.value = "reissue"',
+        'createdAtInput.value = ""',
+        'updatedAtInput.value = ""',
+        "jsonButton.disabled = true",
+        "htmlButton.disabled = true",
+    ):
+        assert contract in handler
+    assert 'form.addEventListener("input"' in javascript
+    assert 'document.querySelector(".common-information").addEventListener("input"' in javascript
 
 
 def test_management_download_buttons_have_responsive_single_line_layout():
@@ -395,3 +391,181 @@ def test_calculation_submit_suppresses_only_intended_unload():
     reset_handler = javascript[reset_start:reset_end]
     assert "calculationSubmitting = false" in reset_handler
     assert '.calculate-button").disabled = false' in reset_handler
+
+
+def test_local_json_file_api_ui_and_no_upload_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    template = Path("app/templates/index.html").read_text(encoding="utf-8")
+    for contract in (
+        'type="file" id="local-json-file" accept=".json,application/json"',
+        'id="load-local-json"',
+        'id="local-json-filename"',
+        'id="local-json-error" role="alert"',
+        "端末のJSONを読み込む",
+    ):
+        assert contract in template
+    start = javascript.index("async function loadLocalJson")
+    end = javascript.index("function protectedAction", start)
+    handler = javascript[start:end]
+    assert "await file.text()" in handler
+    assert "JSON.parse(text)" in handler
+    assert "fetch(" not in handler
+    assert "FormData" not in handler
+    assert "file.textContent" not in handler
+    assert 'localJsonFileInput.value = ""' in handler
+    assert 'localJsonFilename.textContent = file.name' in handler
+
+
+def test_local_json_file_metadata_and_size_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    assert "const LOCAL_JSON_MAX_BYTES = 5 * 1024 * 1024" in javascript
+    start = javascript.index("async function loadLocalJson")
+    end = javascript.index("function protectedAction", start)
+    handler = javascript[start:end]
+    assert "localJsonFileInput.files.length !== 1" in handler
+    assert 'file.name.toLowerCase().endsWith(".json")' in handler
+    assert "const mimeType = file.type.toLowerCase()" in handler
+    assert "if (mimeType &&" in handler
+    assert 'mimeType !== "application/json"' in handler
+    assert 'mimeType !== "text/json"' in handler
+    assert 'mimeType.endsWith("+json")' in handler
+    assert "file.size > LOCAL_JSON_MAX_BYTES" in handler
+    for message in (
+        "JSONファイルを選択してください",
+        "読み込めるJSONファイルではありません",
+        "JSONファイルが大きすぎます",
+    ):
+        assert message in handler
+
+
+def test_local_json_structure_validation_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    start = javascript.index("function validateLocalRecord")
+    end = javascript.index("function captureCurrentState", start)
+    validator = javascript[start:end]
+    assert "isPlainObject(record)" in validator
+    assert "exceedsJsonDepth(record)" in validator
+    assert 'record.format_version !== "1.0"' in validator
+    for key in (
+        "format_version", "app_version", "management_number", "created_at",
+        "updated_at", "input", "calculation_result",
+    ):
+        assert f'"{key}"' in validator
+    assert "LEGACY_MANAGEMENT_NUMBER.test" in validator
+    assert "CURRENT_MANAGEMENT_NUMBER.test" in validator
+    assert "TOKYO_TIMESTAMP.test(record.created_at)" in validator
+    assert "TOKYO_TIMESTAMP.test(record.updated_at)" in validator
+    assert '!["required_stock", "inventory"].includes(input.mode)' in validator
+    assert "Array.isArray(rows)" in javascript
+    assert "Number.isSafeInteger(value)" in javascript
+    assert "LOCAL_JSON_MAX_ROWS = 1000" in javascript
+    assert "LOCAL_JSON_MAX_DEPTH = 8" in javascript
+    assert "value.length > LOCAL_JSON_MAX_BYTES" in javascript
+
+
+def test_local_json_accepts_legacy_and_current_number_patterns_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    assert r"/^NEST-\d{8}-\d{3}$/" in javascript
+    assert r"/^NEST-\d{8}-\d{6}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/" in javascript
+    assert "管理番号の形式が正しくありません" in javascript
+    assert "日時の形式が正しくありません" in javascript
+
+
+def test_local_json_normalizes_before_atomic_application_and_ignores_result_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    load_start = javascript.index("async function loadLocalJson")
+    load_end = javascript.index("function protectedAction", load_start)
+    handler = javascript[load_start:load_end]
+    assert handler.index("const record = validateLocalRecord(parsed)") < handler.index("applyRecord(record")
+    assert "const previousState = captureCurrentState()" in handler
+    assert "restoreCurrentState(previousState)" in handler
+    validator_start = javascript.index("function validateLocalRecord")
+    validator_end = javascript.index("function captureCurrentState", validator_start)
+    validator = javascript[validator_start:validator_end]
+    assert "calculation_result: {}" in validator
+    assert "record.calculation_result" not in validator.replace("isPlainObject(record.calculation_result)", "")
+    assert ".innerHTML" not in javascript
+
+
+def test_local_json_state_preserves_identity_until_recalculation_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    start = javascript.index("function applyRecord")
+    end = javascript.index("function isPlainObject", start)
+    apply_handler = javascript[start:end]
+    for contract in (
+        "managementNumber = record.management_number",
+        "createdAt = record.created_at",
+        "updatedAt = record.updated_at",
+        "requiresManagementNumberReissue = false",
+        "hasValidResult = false",
+        "jsonExported = false",
+        "htmlExported = false",
+        "jsonLoadedPendingCalculation = true",
+        'managementNumberStateInput.value = "maintain"',
+        "jsonButton.disabled = true",
+        "htmlButton.disabled = true",
+    ):
+        assert contract in apply_handler
+    assert "JSON読込済み・再計算前" in javascript
+    invalidate_start = javascript.index("function invalidateCalculationResult")
+    invalidate_end = javascript.index("function formInput", invalidate_start)
+    assert "jsonLoadedPendingCalculation = false" in javascript[invalidate_start:invalidate_end]
+
+
+def test_public_v1_has_no_server_storage_routes_or_data_references():
+    client = TestClient(main_module.app)
+    main_source = Path("app/main.py").read_text(encoding="utf-8")
+    template = Path("app/templates/index.html").read_text(encoding="utf-8")
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    assert not Path("app/storage.py").exists()
+    for forbidden in ("RecordStorage", "DATA_DIR", 'Path(__file__).resolve().parent.parent / "data"'):
+        assert forbidden not in main_source
+    for path in ("/api/save", "/api/records/NEST-20260726-001", "/download/NEST-20260726-001.json", "/download/NEST-20260726-001.html"):
+        assert client.get(path).status_code in (404, 405)
+        assert client.post(path).status_code in (404, 405)
+    for forbidden in ("/api/save", "/api/records/", "/download/", "saveRecord", "loadSelected"):
+        assert forbidden not in javascript
+    for forbidden in ('id="save-record"', 'id="record-select"', 'id="load-record"', "保存済み", "旧サーバー"):
+        assert forbidden not in template
+
+
+def test_public_v1_buttons_reach_only_direct_memory_exports():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    template = Path("app/templates/index.html").read_text(encoding="utf-8")
+    assert template.count('id="download-json"') == 1
+    assert template.count('id="download-html"') == 1
+    assert template.count('id="load-local-json"') == 1
+    assert javascript.count('jsonButton.addEventListener("click", downloadJson)') == 1
+    assert javascript.count('htmlButton.addEventListener("click", downloadHtml)') == 1
+    assert javascript.count('localJsonLoadButton.addEventListener("click", () => protectedAction(loadLocalJson))') == 1
+    json_handler = javascript[javascript.index("async function downloadJson"):javascript.index('jsonButton.addEventListener("click", downloadJson)')]
+    html_handler = javascript[javascript.index("async function downloadHtml"):javascript.index('htmlButton.addEventListener("click", downloadHtml)')]
+    assert 'fetch("/api/export/json"' in json_handler
+    assert 'fetch("/api/export/html"' in html_handler
+    assert "/api/export/html" not in json_handler
+    assert "/api/export/json" not in html_handler
+    assert "downloadJson()" not in html_handler
+    assert 'type="button"' in template
+    assert "?v=20260805-v1" in template
+
+
+def test_direct_exports_create_no_files_in_isolated_working_directory(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(main_module.app)
+    assert client.post("/api/export/json", json=direct_export_request()).status_code == 200
+    assert client.post("/api/export/html", json=direct_export_request()).status_code == 200
+    assert list(tmp_path.rglob("*")) == []
+
+
+def test_public_v1_does_not_persist_calculation_state_or_log_user_payloads():
+    javascript = Path(__file__).parents[1].joinpath("app/static/js/input.js").read_text(encoding="utf-8")
+    application = Path(__file__).parents[1].joinpath("app/main.py").read_text(encoding="utf-8")
+    for forbidden in ("localStorage", "indexedDB", "document.cookie"):
+        assert forbidden not in javascript
+    session_lines = [line for line in javascript.splitlines() if "sessionStorage" in line]
+    assert session_lines
+    assert all("calculationScrollKey" in line for line in session_lines)
+    assert not any(name in line for line in session_lines for name in ("managementNumber", "createdAt", "updatedAt", "jsonExported", "htmlExported"))
+    for forbidden in ("print(", "console.log", "console.debug", "console.info", "logging.", "logger."):
+        assert forbidden not in application
+        assert forbidden not in javascript

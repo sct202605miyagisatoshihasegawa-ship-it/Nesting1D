@@ -5,15 +5,18 @@ from fastapi import FastAPI, Request
 from pydantic import ValidationError
 from app.calculation import CalculationInput, calculate
 from app.exporting import make_record, render_report
-from app.storage import RecordStorage, StorageError, tokyo_now
+from app.records import (
+    generate_management_number,
+    is_valid_management_number,
+    is_valid_tokyo_timestamp,
+    tokyo_now,
+)
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR.parent / "data"
-storage = RecordStorage(DATA_DIR)
 DEFAULT_FORM={"mode":"required_stock","title":"","material_type":"","author":"","notes":"","new_stock_length_mm":"","kerf_mm":"0","left_trim_mm":"10","new_stock_quantity":"0","part_lengths":[""],"part_quantities":[""],"remnant_lengths":[""],"remnant_quantities":[""]}
 
 
@@ -47,7 +50,10 @@ def read_root(request: Request) -> HTMLResponse:
             "view": None,
             "input_snapshot": None,
             "calculated_at": None,
-            "records": storage.list_records(),
+            "management_number": "",
+            "management_number_state": "reissue",
+            "created_at": "",
+            "updated_at": "",
         },
     )
 
@@ -162,6 +168,10 @@ def _display_result(result,form:dict)->dict:
 @app.post("/",response_class=HTMLResponse)
 async def calculate_from_form(request:Request)->HTMLResponse:
     raw=await request.form()
+    requested_management_number=str(raw.get("result_management_number",""))
+    management_number_state=str(raw.get("management_number_state","reissue"))
+    requested_created_at=str(raw.get("result_created_at",""))
+    requested_updated_at=str(raw.get("result_updated_at",""))
     form:dict[str,Any]={"mode":str(raw.get("mode","required_stock")),"title":str(raw.get("title","")),"material_type":str(raw.get("material_type","")),"author":str(raw.get("author","")),"notes":str(raw.get("notes","")),"new_stock_length_mm":str(raw.get("new_stock_length_mm","")),"kerf_mm":str(raw.get("kerf_mm","")),"left_trim_mm":str(raw.get("left_trim_mm","")),"new_stock_quantity":str(raw.get("new_stock_quantity","0")),"part_lengths":[str(x) for x in raw.getlist("part_length")],"part_quantities":[str(x) for x in raw.getlist("part_quantity")],"remnant_lengths":[str(x) for x in raw.getlist("remnant_length")],"remnant_quantities":[str(x) for x in raw.getlist("remnant_quantity")]}
     errors=[]; field_errors:dict[str,list[str]]={}; mode=form["mode"]
     if mode not in {"required_stock","inventory"}: errors.append("計算モードを選択してください。")
@@ -189,13 +199,31 @@ async def calculate_from_form(request:Request)->HTMLResponse:
     view=None
     input_snapshot=None
     calculated_at=None
+    management_number=""
+    created_at=""
+    updated_at=""
     if not errors and None not in (stock,kerf,trim):
         payload={"mode":mode,"cutting_conditions":{"new_stock_length_mm":stock,"kerf_mm":kerf,"left_trim_mm":trim},"required_parts":parts}
         if mode=="inventory": payload["inventory"]=inventory
         try:
             result=calculate(CalculationInput.model_validate(payload)); view=_display_result(result,form)
             input_snapshot=_input_snapshot(mode,stock,kerf,trim,parts)
-            calculated_at=tokyo_now().strftime("%Y-%m-%d %H:%M:%S")
+            calculation_time=tokyo_now()
+            calculated_at=calculation_time.strftime("%Y-%m-%d %H:%M:%S")
+            maintain_identity=(
+                management_number_state=="maintain"
+                and is_valid_management_number(requested_management_number)
+                and is_valid_tokyo_timestamp(requested_created_at)
+                and is_valid_tokyo_timestamp(requested_updated_at)
+            )
+            if maintain_identity:
+                management_number=requested_management_number
+                created_at=requested_created_at
+                updated_at=requested_updated_at
+            else:
+                management_number=generate_management_number(calculation_time)
+                created_at=calculation_time.isoformat(timespec="seconds")
+                updated_at=created_at
         except ValidationError: errors.append("入力件数または合計本数が上限を超えています。入力を確認してください。")
         except ValueError as exc: errors.append(str(exc))
         except Exception: errors.append("計算中に予期しないエラーが発生しました。入力を確認して再度お試しください。")
@@ -210,7 +238,10 @@ async def calculate_from_form(request:Request)->HTMLResponse:
             "view": view,
             "input_snapshot": input_snapshot,
             "calculated_at": calculated_at,
-            "records": storage.list_records(),
+            "management_number": management_number,
+            "management_number_state": "maintain" if management_number else "reissue",
+            "created_at": created_at,
+            "updated_at": updated_at,
         },
     )
 
@@ -228,71 +259,75 @@ def _saved_input(data: dict):
     return calculation_input, result, _display_result(result, form)
 
 
-def _save_error(message: str = "処理できませんでした。入力内容を確認してください。"):
+def _export_error(message: str = "処理できませんでした。入力内容を確認してください。"):
     return JSONResponse({"ok": False, "message": message}, status_code=400)
 
 
-@app.post("/api/save")
-async def save_record(request: Request):
+def _build_export_record(body: dict):
+    input_data = body["input"]
+    number = str(body["management_number"])
+    created_at = str(body["created_at"])
+    updated_at = str(body["updated_at"])
+    if (
+        not is_valid_management_number(number)
+        or not is_valid_tokyo_timestamp(created_at)
+        or not is_valid_tokyo_timestamp(updated_at)
+    ):
+        raise ValueError("出力識別情報が正しくありません。")
+    calculation_input, result, view = _saved_input(input_data)
+    normalized_input = calculation_input.model_dump() | {
+        "metadata": input_data.get("metadata", {})
+    }
+    record = make_record(
+        number,
+        tokyo_now(),
+        normalized_input,
+        result.model_dump(),
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+    return record, view
+
+
+@app.post("/api/export/json")
+async def export_json(request: Request):
     try:
         body = await request.json()
-        input_data = body["input"]
-        calculation_input, result, view = _saved_input(input_data)
-        input_data = calculation_input.model_dump() | {"metadata": input_data.get("metadata", {})}
-        number = str(body.get("management_number", ""))
-        if number:
-            existing = storage.load(number)
-            if not body.get("overwrite"):
-                return JSONResponse(
-                    {"ok": False, "confirm_overwrite": True, "message": "同じ管理番号の保存データがあります。上書きしますか？"},
-                    status_code=409,
-                )
-            record = make_record(number, tokyo_now(), input_data, result.model_dump(), created_at=existing["created_at"])
-            storage.overwrite(record, render_report(templates, record, view))
-        else:
-            def builder(new_number, now):
-                new_record = make_record(new_number, now, input_data, result.model_dump())
-                return new_record, render_report(templates, new_record, view)
-            record = storage.save_new(builder)
-        return {"ok": True, "management_number": record["management_number"], "updated_at": record["updated_at"]}
-    except (KeyError, TypeError, ValidationError, ValueError, StorageError):
-        return _save_error()
+        record, _ = _build_export_record(body)
+        number = record["management_number"]
+        return JSONResponse(
+            record,
+            headers={
+                "Content-Disposition": f'attachment; filename="{number}.json"',
+                "Cache-Control": "no-store",
+            },
+        )
+    except (KeyError, TypeError, ValidationError, ValueError):
+        return _export_error()
     except Exception:
-        return _save_error()
+        return _export_error()
 
 
-@app.get("/api/records/{management_number}")
-def load_record(management_number: str):
+@app.post("/api/export/html")
+async def export_html(request: Request):
     try:
-        return {"ok": True, "record": storage.load(management_number)}
-    except StorageError as exc:
-        return _save_error(str(exc))
-
-
-@app.get("/download/{management_number}.json")
-def download_json(management_number: str):
-    try:
-        record = storage.load(management_number)
-        response = JSONResponse(record)
-        response.headers["Content-Disposition"] = f'attachment; filename="{management_number}.json"'
-        return response
-    except StorageError:
-        return Response("保存データが見つかりません。", status_code=404)
-
-
-@app.get("/download/{management_number}.html")
-def download_html(management_number: str):
-    try:
-        record = storage.load(management_number)
-        _, result, view = _saved_input(record["input"])
-        content = render_report(templates, record | {"calculation_result": result.model_dump()}, view)
+        body = await request.json()
+        record, view = _build_export_record(body)
+        number = record["management_number"]
+        content = render_report(templates, record, view)
         return Response(
             content,
             media_type="text/html; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="{management_number}.html"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="{number}.html"',
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+            },
         )
-    except (StorageError, ValidationError, ValueError):
-        return Response("保存データが見つからないか、内容が正しくありません。", status_code=404)
+    except (KeyError, TypeError, ValidationError, ValueError):
+        return _export_error()
+    except Exception:
+        return _export_error()
 
 
 @app.get("/health")

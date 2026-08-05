@@ -4,10 +4,10 @@ from typing import Any
 
 from fastapi.templating import Jinja2Templates
 
-from app.storage import APP_VERSION, FORMAT_VERSION
+from app.records import APP_VERSION, FORMAT_VERSION
 
-def make_record(number: str, now: datetime, calculation_input: dict[str, Any], calculation_result: dict[str, Any], *, created_at: str | None = None) -> dict[str, Any]:
-    timestamp = now.isoformat()
+def make_record(number: str, now: datetime, calculation_input: dict[str, Any], calculation_result: dict[str, Any], *, created_at: str | None = None, updated_at: str | None = None) -> dict[str, Any]:
+    timestamp = updated_at or now.isoformat()
     return {
         "format_version": FORMAT_VERSION,
         "app_version": APP_VERSION,

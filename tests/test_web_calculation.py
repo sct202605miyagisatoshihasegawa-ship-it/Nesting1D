@@ -1,6 +1,7 @@
 import re
 
 from fastapi.testclient import TestClient
+import app.main as main_module
 from app.main import app
 
 client=TestClient(app)
@@ -71,24 +72,54 @@ def test_stage5_management_actions_and_auxiliary_placement():
     management_panel = html[management_start:common_start]
     assert conditions_start < dashboard_start < management_start < common_start
     assert '<summary>その他の操作</summary>' in conditions_panel
-    for control_id in ("record-select", "load-record"):
+    for control_id in ("local-json-file", "load-local-json"):
         assert f'id="{control_id}"' in conditions_panel
         assert f'id="{control_id}"' not in management_panel
+    for removed_id in ("record-select", "load-record", "save-record"):
+        assert f'id="{removed_id}"' not in html
     for control_id in ("download-json", "download-html"):
         assert f'id="{control_id}"' not in conditions_panel
         assert f'id="{control_id}"' in management_panel
-    assert management_panel.count("<button") == 4
+    assert management_panel.count("<button") == 3
     expected_actions = (
-        'id="save-record">保存</button>',
-        'id="download-json" disabled>JSONダウンロード</button>',
-        'id="download-html" disabled>HTMLダウンロード</button>',
+        'id="download-json" disabled>JSONを端末へ出力</button>',
+        'id="download-html" disabled>HTMLを端末へ出力</button>',
         'id="reset-input">リセット</button>',
     )
     assert all(action in management_panel for action in expected_actions)
     positions = [management_panel.index(action) for action in expected_actions]
     assert positions == sorted(positions)
     assert "新規作成" not in management_panel
-    assert 'id="save-status" class="saved">保存済み</span>' in management_panel
+    assert 'id="save-status" class="saved">未計算</span>' in management_panel
+
+
+def test_calculation_issues_maintains_and_reissues_explicit_result_id(monkeypatch):
+    numbers = iter(("NEST-20260805-103645-A7K2", "NEST-20260805-103646-B8L3"))
+    monkeypatch.setattr(main_module, "generate_management_number", lambda now: next(numbers))
+
+    first = client.post("/", data=normal())
+    assert 'name="result_management_number" value="NEST-20260805-103645-A7K2"' in first.text
+    assert 'name="management_number_state" value="maintain"' in first.text
+    assert "計算済み・未出力" in first.text
+    created_at = re.search(r'name="result_created_at" value="([^"]+)"', first.text).group(1)
+    updated_at = re.search(r'name="result_updated_at" value="([^"]+)"', first.text).group(1)
+    assert created_at == updated_at and created_at.endswith("+09:00")
+
+    maintained = client.post("/", data=normal(
+        result_management_number="NEST-20260805-103645-A7K2",
+        management_number_state="maintain",
+        result_created_at=created_at,
+        result_updated_at=updated_at,
+    ))
+    assert 'name="result_management_number" value="NEST-20260805-103645-A7K2"' in maintained.text
+    assert f'name="result_created_at" value="{created_at}"' in maintained.text
+    assert f'name="result_updated_at" value="{updated_at}"' in maintained.text
+
+    reissued = client.post("/", data=normal(
+        result_management_number="NEST-20260805-103645-A7K2",
+        management_number_state="reissue",
+    ))
+    assert 'name="result_management_number" value="NEST-20260805-103646-B8L3"' in reissued.text
 
 
 def test_success_selects_dashboard_and_snapshot_totals_are_stable():
@@ -202,6 +233,19 @@ def test_pattern_aggregation_and_stock_list():
     assert "2回使用" in response.text
     assert "No.1" in response.text and "No.2" in response.text
     assert "購入新品材" in response.text
+
+
+def test_stock_cards_keep_source_header_and_omit_duplicate_source_row():
+    responses = (
+        (client.post("/", data=normal(mode="inventory", new_stock_length_mm="1000", kerf_mm="3", left_trim_mm="10", new_stock_quantity="0", part_length="590", part_quantity="1", remnant_length="606", remnant_quantity="1")), "在庫残材"),
+        (client.post("/", data=normal(mode="inventory", new_stock_length_mm="1000", kerf_mm="3", left_trim_mm="10", new_stock_quantity="1", part_length="590", part_quantity="1", remnant_length="", remnant_quantity="")), "在庫新品材"),
+        (client.post("/", data=normal(new_stock_length_mm="1000", kerf_mm="3", left_trim_mm="10", part_length="590", part_quantity="1")), "購入新品材"),
+    )
+    for response, source_label in responses:
+        card = re.search(r'<article class="stock-card">.*?</article>', response.text, re.S).group()
+        assert f"<strong>{source_label}</strong>" in card
+        assert re.findall(r"<dt>(.*?)</dt>", card) == ["元の長さ", "パターン", "切出し部材", "使用後"]
+        assert "在庫区分" not in card
 
 def test_field_mode_cutting_instructions():
     response=client.post("/",data=normal(part_quantity="4"))

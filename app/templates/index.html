@@ -29,13 +29,17 @@
             <section class="identity-card" aria-labelledby="identity-heading">
                 <h2 id="identity-heading">計算結果識別情報</h2>
                 <dl>
-                    <div><dt>管理番号</dt><dd id="calculation-management-number">未発行</dd></div>
+                    <div><dt>管理番号</dt><dd id="calculation-management-number">{{ management_number or "未発行" }}</dd></div>
                     <div><dt>計算日時</dt><dd id="calculation-datetime">{{ calculated_at or "未計算" }}</dd></div>
                     <div><dt>計算モード</dt><dd id="calculation-mode">{{ "在庫母材・残材活用" if form.mode == "inventory" else "必要母材算出" }}</dd></div>
                 </dl>
             </section>
         </div>
         <form method="post" class="calculator" id="calculation-form" novalidate>
+            <input type="hidden" id="result-management-number" name="result_management_number" value="{{ management_number }}">
+            <input type="hidden" id="management-number-state" name="management_number_state" value="{{ management_number_state }}">
+            <input type="hidden" id="result-created-at" name="result_created_at" value="{{ created_at }}">
+            <input type="hidden" id="result-updated-at" name="result_updated_at" value="{{ updated_at }}">
             <section class="card"><h2>計算モード</h2><div class="mode-options">
                 <label><input type="radio" name="mode" value="required_stock" {% if form.mode == 'required_stock' %}checked{% endif %}> 必要母材算出</label>
                 <label><input type="radio" name="mode" value="inventory" {% if form.mode == 'inventory' %}checked{% endif %}> 在庫母材・残材活用</label>
@@ -107,13 +111,15 @@
             <details class="other-actions">
                 <summary>その他の操作</summary>
                 <div class="other-actions-content">
-                    <label>保存済みJSONを読込
-                        <select id="record-select">
-                            <option value="">選択してください</option>
-                            {% for number in records %}<option value="{{ number }}">{{ number }}</option>{% endfor %}
-                        </select>
-                    </label>
-                    <button type="button" id="load-record">JSON読込</button>
+                    <div class="local-json-import">
+                        <strong>端末のJSONを読み込む</strong>
+                        <label>JSONファイル
+                            <input type="file" id="local-json-file" accept=".json,application/json">
+                        </label>
+                        <span id="local-json-filename">ファイル未選択</span>
+                        <button type="button" id="load-local-json">端末JSON読込</button>
+                        <p id="local-json-error" role="alert"></p>
+                    </div>
                 </div>
             </details>
         </section>
@@ -177,8 +183,7 @@
                 <dl><div><dt>元の長さ</dt><dd>{{ stock.original_length_mm }}mm</dd></div>
                     <div><dt>パターン</dt><dd>{{ stock.pattern_id }}</dd></div>
                     <div><dt>切出し部材</dt><dd>{% for cut in stock.cuts %}<span class="measurement">{{ cut }}mm</span>{% if not loop.last %}、{% endif %}{% endfor %}</dd></div>
-                    <div><dt>使用後</dt><dd>{{ stock.state_label }}{% if stock.remainder_class != 'used_up' %} {{ stock.remaining_length_mm }}mm{% endif %}</dd></div>
-                    <div><dt>在庫区分</dt><dd>{{ stock.source_label }}</dd></div></dl>
+                    <div><dt>使用後</dt><dd>{{ stock.state_label }}{% if stock.remainder_class != 'used_up' %} {{ stock.remaining_length_mm }}mm{% endif %}</dd></div></dl>
             </article>{% endfor %}</div>
         </section>
 
@@ -210,13 +215,12 @@
         <section class="card file-toolbar" aria-labelledby="management-actions-heading">
             <div class="management-heading">
                 <h2 id="management-actions-heading">管理・アクション</h2>
-                <span id="save-status" class="saved">保存済み</span>
+                <span id="save-status" class="{{ 'unsaved' if result else 'saved' }}">{{ '計算済み・未出力' if result else '未計算' }}</span>
             </div>
-            <div><strong>管理番号：</strong><span id="management-number">未発行</span></div>
+            <div><strong>管理番号：</strong><span id="management-number">{{ management_number or "未発行" }}</span></div>
             <div class="file-actions">
-                <button type="button" id="save-record">保存</button>
-                <button type="button" id="download-json" disabled>JSONダウンロード</button>
-                <button type="button" id="download-html" disabled>HTMLダウンロード</button>
+                <button type="button" id="download-json"{% if not result %} disabled{% endif %}>JSONを端末へ出力</button>
+                <button type="button" id="download-html"{% if not result %} disabled{% endif %}>HTMLを端末へ出力</button>
                 <button type="button" id="reset-input">リセット</button>
             </div>
             <p id="file-message" role="alert"></p>
@@ -228,14 +232,13 @@
                 <label class="wide">備考<textarea form="calculation-form" name="notes">{{ form.notes }}</textarea></label>
             </div></section>
         <dialog id="unsaved-dialog">
-            <p>未保存の変更があります。</p>
-            <button value="save">保存</button>
-            <button value="discard">破棄</button>
-            <button value="cancel">キャンセル</button>
+            <p>現在の入力内容を破棄しますか？</p>
+            <button type="button" value="discard">破棄</button>
+            <button type="button" value="cancel">キャンセル</button>
         </dialog>
         <template id="part-row-template"><div class="input-row"><label>寸法（mm）<input name="part_length" inputmode="numeric"></label><label>必要本数<input name="part_quantity" inputmode="numeric"></label><button type="button" class="remove">削除</button></div></template>
         <template id="remnant-row-template"><div class="input-row"><label>残材寸法（mm）<input name="remnant_length" inputmode="numeric"></label><label>保有本数<input name="remnant_quantity" inputmode="numeric"></label><button type="button" class="remove">削除</button></div></template>
-        <script src="{{ url_for('static', path='/js/input.js') }}" defer></script>
+        <script src="{{ url_for('static', path='/js/input.js') }}?v=20260805-v1" defer></script>
     </main>
 </body>
 </html>

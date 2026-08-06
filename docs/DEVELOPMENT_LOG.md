@@ -294,3 +294,17 @@
 - 人間確認が必要な項目：Cloud Run上で公開URL、`robots.txt`、HTMLキャッシュ抑止、ダウンロード動作を確認する。
 - 将来JavaScriptへ移植する際の注意点：PWAでキャッシュ戦略を導入する際は、今回のHTML no-storeとService Workerの責務を明示的に再設計する。
 - 次工程：公開対応の後続工程。第2-Aを超える制御は今回実装しない。
+
+## 2026-08-06：Cloud Run公開対応 第2-B HTTP本文サイズ上限と413応答
+- 実装日：2026-08-06。
+- 実装した内容：`MAX_REQUEST_BODY_BYTES`解析、既定256 KiB、Content-Length事前判定、ASGI分割受信量判定、413・不正Content-Lengthの400を追加した。
+- 実装理由：Cloud Runのプラットフォーム制限とは別に、アプリのルート処理前で過大本文を拒否し、メモリ・処理負荷を抑えるため。
+- 要件定義との対応：安全性、性能、公開環境問題への対応、リリース前確認。
+- 採用した設計：`app/request_limits.py`の純粋ASGIミドルウェアで`receive`を一度だけラップし、チャンクを複製せずバイト数だけ累積する。第2-Aヘッダーミドルウェアを外側に保つ登録順とした。
+- 変更したファイル：`app/main.py`、`app/request_limits.py`、`Dockerfile.prod`、`tests/test_request_body_limit.py`、開発記録3ファイル。
+- 実行したテスト：`pytest -q tests/test_request_body_limit.py tests/test_production_security.py -p no:cacheprovider`、`pytest -q -p no:cacheprovider`、`git diff --check`、差分・変更禁止範囲確認。
+- テスト結果：関連39件成功、全204件成功、失敗0件。既存のStarlette TestClient非推奨警告1件。
+- 未解決事項：256 KiBは初回負荷試験前の仮上限。正常な最大入力の実測と負荷試験後に再評価が必要。
+- 人間確認が必要な項目：Cloud Run上で通常フォーム・JSON/HTML出力、413・400、共通ヘッダーを確認する。
+- 将来JavaScriptへ移植する際の注意点：クライアント側の入力制御だけに依存せず、サーバー受信上限を独立した境界として維持する。
+- 次工程：負荷試験および後続の公開対応。レート制限・タイムアウト等は今回実装しない。

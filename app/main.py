@@ -6,6 +6,10 @@ from fastapi import FastAPI, Request
 from pydantic import ValidationError
 from app.calculation import CalculationInput, calculate
 from app.exporting import make_record, render_report
+from app.request_limits import (
+    RequestBodyLimitMiddleware,
+    parse_max_request_body_bytes,
+)
 from app.records import (
     generate_management_number,
     is_valid_management_number,
@@ -35,6 +39,11 @@ app = FastAPI(
     docs_url=None if production else "/docs",
     redoc_url=None if production else "/redoc",
     openapi_url=None if production else "/openapi.json",
+)
+
+app.add_middleware(
+    RequestBodyLimitMiddleware,
+    max_bytes=parse_max_request_body_bytes(),
 )
 
 

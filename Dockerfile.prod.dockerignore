@@ -1,0 +1,12 @@
+# Deny everything by default, then allow only the production build inputs.
+*
+!Dockerfile.prod
+!requirements.txt
+!app/
+!app/**
+
+# Never include generated Python files or environment files from app/.
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*

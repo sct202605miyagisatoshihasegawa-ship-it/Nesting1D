@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any
 
@@ -20,11 +21,41 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_FORM={"mode":"required_stock","title":"","material_type":"","author":"","notes":"","new_stock_length_mm":"","kerf_mm":"0","left_trim_mm":"10","new_stock_quantity":"0","part_lengths":[""],"part_quantities":[""],"remnant_lengths":[""],"remnant_quantities":[""]}
 
 
+def is_production(app_env: str | None = None) -> bool:
+    """Return whether the configured application environment is production."""
+    value = os.getenv("APP_ENV", "") if app_env is None else app_env
+    return value.strip().lower() == "production"
+
+
+production = is_production()
 app = FastAPI(
     title="Nesting1D",
     description="一次元ネスティング計算アプリ",
     version="0.1.0",
+    docs_url=None if production else "/docs",
+    redoc_url=None if production else "/redoc",
+    openapi_url=None if production else "/openapi.json",
 )
+
+
+@app.middleware("http")
+async def add_response_headers(request: Request, call_next):
+    response = await call_next(request)
+
+    # Route-specific values take precedence if a response already set a header.
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=()",
+    )
+
+    if response.headers.get("content-type", "").lower().startswith("text/html"):
+        response.headers.setdefault("Cache-Control", "no-store")
+
+    return response
+
 
 app.mount(
     "/static",
@@ -35,6 +66,16 @@ app.mount(
 templates = Jinja2Templates(
     directory=BASE_DIR / "templates"
 )
+
+
+@app.get("/robots.txt", response_class=Response)
+def robots_txt() -> Response:
+    # This only asks search engines not to crawl; it is not access control.
+    return Response(
+        "User-agent: *\nDisallow: /\n",
+        media_type="text/plain",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/", response_class=HTMLResponse)

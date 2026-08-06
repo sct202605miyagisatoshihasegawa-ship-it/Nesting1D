@@ -280,3 +280,17 @@
 - 未解決事項：限定試用の具体的な日時、URL共有先、HTTPS・アクセス制限等の公開環境設定はリリース前確認で確定する。
 - 次工程：チェック7「リリース前最終確認」。READMEおよび一般利用者向け説明書の最終仕上げは、限定試用で実際の利用方法と注意点を確認した後に行う。
 - 将来JavaScriptへ移植する際の注意点：PWA化やブラウザ永続保存はV1へ追加せず、V2以降の独立した要件として扱う。
+
+## 2026-08-06：Cloud Run公開対応 第2-A 公開環境の基本設定
+- 実装日：2026-08-06。
+- 実装した内容：`APP_ENV`による本番識別、本番時のFastAPIドキュメント無効化、共通セキュリティヘッダー、HTMLキャッシュ抑止、noindexメタタグ、`robots.txt`を追加した。
+- 実装理由：公開版V1の機能を変更せず、Cloud Runでの限定公開に必要な基本的な露出・埋込み・キャッシュ対策を加えるため。
+- 要件定義との対応：安全性、公開版V1非永続方針、リリース前チェック、判断18の公開環境問題・セキュリティ修正。
+- 採用した設計：環境判定は標準ライブラリだけの小関数とし、ヘッダーは単一HTTPミドルウェアで既存値を上書きせず付与する。HTML判定はContent-Typeで行い、静的ファイルへno-storeを誤適用しない。
+- 変更したファイル：`Dockerfile.prod`、`app/main.py`、`app/templates/index.html`、`app/templates/report.html`、`tests/test_production_security.py`、開発記録3ファイル。
+- 実行したテスト：`pytest -q tests/test_production_security.py tests/test_main.py tests/test_web_calculation.py tests/test_checkpoint5.py -p no:cacheprovider`、`pytest -q -p no:cacheprovider`、`git diff --check`、差分・変更範囲確認。
+- テスト結果：関連84件成功、全179件成功、失敗0件。既存のStarlette TestClient非推奨警告1件。
+- 未解決事項：CSP、HTTPSリダイレクト、Trusted Host、アクセス制限、レート制限等は第2-A対象外。Cloud Run実環境でのヘッダー確認とドキュメント404確認はデプロイ後に必要。
+- 人間確認が必要な項目：Cloud Run上で公開URL、`robots.txt`、HTMLキャッシュ抑止、ダウンロード動作を確認する。
+- 将来JavaScriptへ移植する際の注意点：PWAでキャッシュ戦略を導入する際は、今回のHTML no-storeとService Workerの責務を明示的に再設計する。
+- 次工程：公開対応の後続工程。第2-Aを超える制御は今回実装しない。

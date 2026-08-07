@@ -11,7 +11,7 @@
 
     <link
         rel="stylesheet"
-        href="{{ url_for('static', path='/css/style.css') }}"
+        href="/static/css/style.css"
     >
 </head>
 
@@ -239,7 +239,7 @@
         </dialog>
         <template id="part-row-template"><div class="input-row"><label>寸法（mm）<input name="part_length" inputmode="numeric"></label><label>必要本数<input name="part_quantity" inputmode="numeric"></label><button type="button" class="remove">削除</button></div></template>
         <template id="remnant-row-template"><div class="input-row"><label>残材寸法（mm）<input name="remnant_length" inputmode="numeric"></label><label>保有本数<input name="remnant_quantity" inputmode="numeric"></label><button type="button" class="remove">削除</button></div></template>
-        <script src="{{ url_for('static', path='/js/input.js') }}?v=20260805-v1" defer></script>
+        <script src="/static/js/input.js?v=20260805-v1" defer></script>
     </main>
 </body>
 </html>

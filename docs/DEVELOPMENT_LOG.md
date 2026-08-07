@@ -308,3 +308,18 @@
 - 人間確認が必要な項目：Cloud Run上で通常フォーム・JSON/HTML出力、413・400、共通ヘッダーを確認する。
 - 将来JavaScriptへ移植する際の注意点：クライアント側の入力制御だけに依存せず、サーバー受信上限を独立した境界として維持する。
 - 次工程：負荷試験および後続の公開対応。レート制限・タイムアウト等は今回実装しない。
+
+
+## 2026-08-07：V1入力制限のUI・サーバー整合
+- 実装日：2026-08-07。
+- 実装した内容：必要部材1行の本数を1～500本へ制限し、フォーム検証と計算入力モデルの両方で501本以上を拒否した。件名20文字、材料種類30文字、データ製作者30文字、備考400文字の上限をサーバー検証とHTML maxlengthへ追加した。HTTP本文上限を64 KiB（65536 bytes）へ変更した。
+- 実装理由：ブラウザUIの制限を直接POSTで回避できないようにし、公開版V1の入力処理量を早期に制限するため。
+- 要件定義との対応：入力制約、極端に大きな入力値の拒否、エラー時の計算中止、安全性、性能。
+- 採用した設計：必要部材専用のPartCountを設け、在庫数量の100,000本上限を分離して維持した。文字列はPythonのlenで判定し、上限超過時は既存のHTTP 200再表示へ統合した。本文超過は既存ASGIミドルウェアでルート到達前に413とする。
+- 変更したファイル：Dockerfile.prod、app/calculation/models.py、app/main.py、app/request_limits.py、app/templates/index.html、tests/test_web_calculation.py、tests/test_request_body_limit.py、docs/DECISIONS.md、docs/DEVELOPMENT_LOG.md、docs/TEST_RESULTS.md。
+- 実行したテスト：pytest -q tests/test_web_calculation.py tests/test_request_body_limit.py -p no:cacheprovider、pytest -q -p no:cacheprovider、git diff --check。
+- テスト結果：関連68件成功、全221件成功、失敗0件。既存のStarlette TestClient非推奨警告1件。
+- 未解決事項：なし。Cloud Run再デプロイ後に実環境の413応答とブラウザ制約を確認する。
+- 人間確認が必要な項目：必要本数500の入力・501のブラウザ拒否、各文字列上限、64 KiB超過時の413。
+- 将来JavaScriptへ移植する際の注意点：必要部材500本と文字列上限を共通仕様として維持し、クライアント検証だけに依存しない。
+- 次工程：チェック7のリリース前最終確認を継続する。

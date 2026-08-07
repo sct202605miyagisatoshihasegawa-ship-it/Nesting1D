@@ -262,3 +262,15 @@
 - 警告：既存のStarlette TestClient非推奨警告1件。依存関係変更禁止のため未修正。
 - 人間確認が必要な項目：Cloud Run上での実受信制限と、負荷試験後の仮上限再評価。
 - 人間確認の結果：未確認。
+
+
+## 2026-08-07：V1入力制限のUI・サーバー整合
+- 対象フェーズ：Cloud Run限定公開前の入力検証修正。
+- 実行したテスト：pytest -q tests/test_web_calculation.py tests/test_request_body_limit.py -p no:cacheprovider、pytest -q -p no:cacheprovider、git diff --check。
+- 成功件数：関連68件、全221件。
+- 失敗件数：0件。
+- 修正内容：必要部材本数1・500成功、501拒否とcalculate未到達、4文字列の上限ちょうど・上限超過・日本語文字数、HTMLエスケープ、HTML属性、本文65536 bytes受理・65537 bytes拒否を追加確認した。
+- 回帰確認：在庫新品材・在庫残材の100,000本上限、行数、寸法、鋸刃厚・捨て切り、合計本数、保存・HTML出力、既存413・400応答を維持した。
+- 警告：既存のStarlette TestClient非推奨警告1件。変更対象外。
+- 人間確認が必要な項目：Cloud Run上のブラウザ入力制約、直接POSTのエラー表示、本文超過413。
+- 人間確認の結果：未確認。

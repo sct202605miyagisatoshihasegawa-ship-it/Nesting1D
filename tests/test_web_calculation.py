@@ -1,4 +1,5 @@
 import re
+import pytest
 
 from fastapi.testclient import TestClient
 import app.main as main_module
@@ -183,7 +184,7 @@ def test_inline_errors_mark_only_invalid_fields_and_keep_row_indexes():
     assert 'id="error-part-length-1"' in response.text
     assert 'id="error-part-quantity-1"' in response.text
     assert "1以上1000000以下の整数を入力してください。" in response.text
-    assert "1以上100000以下の整数を入力してください。" in response.text
+    assert "1以上500以下の整数を入力してください。" in response.text
     assert "計算結果ダッシュボード" not in response.text
 
 
@@ -293,3 +294,59 @@ def test_result_navigation_and_html_escape():
     assert "&lt;img src=x onerror=&#34;alert(1)&#34;&gt;" in response.text
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in response.text
     assert '<script>alert(1)</script>' not in response.text
+
+
+@pytest.mark.parametrize("quantity", ["1", "500"])
+def test_part_quantity_boundaries_are_calculated(quantity):
+    response = client.post("/", data=normal(part_quantity=quantity))
+    assert response.status_code == 200
+    assert "計算結果ダッシュボード" in response.text
+    assert f"<dd>{quantity}本</dd>" in response.text
+
+
+def test_part_quantity_501_is_rejected_without_calculation(monkeypatch):
+    called = False
+
+    def unexpected_calculate(_data):
+        nonlocal called
+        called = True
+        raise AssertionError("calculate must not be called")
+
+    monkeypatch.setattr(main_module, "calculate", unexpected_calculate)
+    response = client.post("/", data=normal(part_quantity="501"))
+
+    assert response.status_code == 200
+    assert not called
+    assert "必要部材1行目の本数は1以上500以下" in response.text
+    assert "1以上500以下の整数を入力してください。" in response.text
+    assert "計算結果ダッシュボード" not in response.text
+
+
+def test_form_declares_part_quantity_and_text_limits():
+    html = client.get("/").text
+    assert html.count('name="part_quantity" type="number" inputmode="numeric" min="1" max="500" step="1"') == 2
+    for name, maximum in (("title", 20), ("material_type", 30), ("author", 30), ("notes", 400)):
+        assert f'name="{name}" maxlength="{maximum}"' in html
+
+
+@pytest.mark.parametrize(
+    ("field", "maximum", "label"),
+    (("title", 20, "件名"), ("material_type", 30, "材料種類"), ("author", 30, "データ製作者"), ("notes", 400, "備考")),
+)
+def test_text_fields_accept_exact_limit_and_reject_one_over(field, maximum, label):
+    accepted = client.post("/", data=normal(**{field: "日" * maximum}))
+    rejected = client.post("/", data=normal(**{field: "日" * (maximum + 1)}))
+
+    assert "計算結果ダッシュボード" in accepted.text
+    assert f"{label}は{maximum}文字以下で入力してください。" in rejected.text
+    assert "計算結果ダッシュボード" not in rejected.text
+
+
+def test_text_length_counts_python_characters_and_keeps_html_escaping():
+    value = "<>&\"'" + "日" * 15
+    response = client.post("/", data=normal(title=value))
+
+    assert len(value) == 20
+    assert "計算結果ダッシュボード" in response.text
+    assert "&lt;&gt;&amp;&#34;&#39;" in response.text or "&lt;&gt;&amp;&#34;'" in response.text
+    assert value not in response.text

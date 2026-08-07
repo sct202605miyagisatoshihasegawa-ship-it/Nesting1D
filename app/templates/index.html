@@ -64,7 +64,7 @@
                 <div id="part-rows" class="rows">
                 {% for length in form.part_lengths %}<div class="input-row">
                     <label>寸法（mm）<input name="part_length" inputmode="numeric" value="{{ length }}"{% if field_errors.get("part_length_" ~ loop.index0) %} class="field-error-input" aria-invalid="true" aria-describedby="error-part-length-{{ loop.index0 }}"{% endif %}>{% if field_errors.get("part_length_" ~ loop.index0) %}<span class="field-error-message" id="error-part-length-{{ loop.index0 }}">{{ field_errors["part_length_" ~ loop.index0][0] }}</span>{% endif %}</label>
-                    <label>必要本数<input name="part_quantity" inputmode="numeric" value="{{ form.part_quantities[loop.index0] if loop.index0 < form.part_quantities|length else '' }}"{% if field_errors.get("part_quantity_" ~ loop.index0) %} class="field-error-input" aria-invalid="true" aria-describedby="error-part-quantity-{{ loop.index0 }}"{% endif %}>{% if field_errors.get("part_quantity_" ~ loop.index0) %}<span class="field-error-message" id="error-part-quantity-{{ loop.index0 }}">{{ field_errors["part_quantity_" ~ loop.index0][0] }}</span>{% endif %}</label>
+                    <label>必要本数<input name="part_quantity" type="number" inputmode="numeric" min="1" max="500" step="1" value="{{ form.part_quantities[loop.index0] if loop.index0 < form.part_quantities|length else '' }}"{% if field_errors.get("part_quantity_" ~ loop.index0) %} class="field-error-input" aria-invalid="true" aria-describedby="error-part-quantity-{{ loop.index0 }}"{% endif %}>{% if field_errors.get("part_quantity_" ~ loop.index0) %}<span class="field-error-message" id="error-part-quantity-{{ loop.index0 }}">{{ field_errors["part_quantity_" ~ loop.index0][0] }}</span>{% endif %}</label>
                     <button type="button" class="remove" aria-label="必要部材行を削除">削除</button>
                 </div>{% endfor %}
                 </div>
@@ -227,17 +227,17 @@
             <p id="file-message" role="alert"></p>
         </section>
             <section class="card common-information"><h2>共通情報</h2><div class="grid">
-                <label>件名<input form="calculation-form" name="title" value="{{ form.title }}"></label>
-                <label>材料種類<input form="calculation-form" name="material_type" value="{{ form.material_type }}"></label>
-                <label>データ製作者<input form="calculation-form" name="author" value="{{ form.author }}"></label>
-                <label class="wide">備考<textarea form="calculation-form" name="notes">{{ form.notes }}</textarea></label>
+                <label>件名<input form="calculation-form" name="title" maxlength="20" value="{{ form.title }}"></label>
+                <label>材料種類<input form="calculation-form" name="material_type" maxlength="30" value="{{ form.material_type }}"></label>
+                <label>データ製作者<input form="calculation-form" name="author" maxlength="30" value="{{ form.author }}"></label>
+                <label class="wide">備考<textarea form="calculation-form" name="notes" maxlength="400">{{ form.notes }}</textarea></label>
             </div></section>
         <dialog id="unsaved-dialog">
             <p>現在の入力内容を破棄しますか？</p>
             <button type="button" value="discard">破棄</button>
             <button type="button" value="cancel">キャンセル</button>
         </dialog>
-        <template id="part-row-template"><div class="input-row"><label>寸法（mm）<input name="part_length" inputmode="numeric"></label><label>必要本数<input name="part_quantity" inputmode="numeric"></label><button type="button" class="remove">削除</button></div></template>
+        <template id="part-row-template"><div class="input-row"><label>寸法（mm）<input name="part_length" inputmode="numeric"></label><label>必要本数<input name="part_quantity" type="number" inputmode="numeric" min="1" max="500" step="1"></label><button type="button" class="remove">削除</button></div></template>
         <template id="remnant-row-template"><div class="input-row"><label>残材寸法（mm）<input name="remnant_length" inputmode="numeric"></label><label>保有本数<input name="remnant_quantity" inputmode="numeric"></label><button type="button" class="remove">削除</button></div></template>
         <script src="/static/js/input.js?v=20260805-v1" defer></script>
     </main>

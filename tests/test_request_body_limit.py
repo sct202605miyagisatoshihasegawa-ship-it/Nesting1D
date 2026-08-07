@@ -384,3 +384,31 @@ def test_non_http_scope_passes_through_unchanged() -> None:
 
     asyncio.run(run())
     assert called
+
+
+
+def test_default_limit_accepts_exact_65536_bytes():
+    assert DEFAULT_MAX_REQUEST_BODY_BYTES == 65_536
+    status_code, _, body = run_asgi_request(
+        [b"x" * DEFAULT_MAX_REQUEST_BODY_BYTES],
+        max_bytes=DEFAULT_MAX_REQUEST_BODY_BYTES,
+    )
+    assert status_code == 200
+    assert body == {"received": DEFAULT_MAX_REQUEST_BODY_BYTES}
+
+
+def test_default_limit_rejects_65537_bytes_before_downstream():
+    called = False
+
+    async def downstream(scope, receive, send) -> None:
+        nonlocal called
+        called = True
+
+    status_code, _, body = run_asgi_request(
+        [b"x" * (DEFAULT_MAX_REQUEST_BODY_BYTES + 1)],
+        max_bytes=DEFAULT_MAX_REQUEST_BODY_BYTES,
+        downstream=downstream,
+    )
+    assert status_code == 413
+    assert body == {"detail": "Request body too large"}
+    assert not called

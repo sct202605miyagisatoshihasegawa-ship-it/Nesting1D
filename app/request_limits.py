@@ -5,7 +5,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
-DEFAULT_MAX_REQUEST_BODY_BYTES = 262_144
+DEFAULT_MAX_REQUEST_BODY_BYTES = 65_536
 
 
 def parse_max_request_body_bytes(value: str | None = None) -> int:

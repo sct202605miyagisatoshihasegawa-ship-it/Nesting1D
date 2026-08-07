@@ -3,6 +3,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Length = Annotated[int, Field(strict=True, ge=1, le=1_000_000)]
 Count = Annotated[int, Field(strict=True, ge=1, le=100_000)]
+PartCount = Annotated[int, Field(strict=True, ge=1, le=500)]
 Condition = Annotated[int, Field(strict=True, ge=0, le=10_000)]
 
 class Model(BaseModel):
@@ -10,10 +11,11 @@ class Model(BaseModel):
 
 class Part(Model):
     length_mm: Length
-    quantity: Count
+    quantity: PartCount
 
-class Remnant(Part):
-    pass
+class Remnant(Model):
+    length_mm: Length
+    quantity: Count
 
 class Conditions(Model):
     new_stock_length_mm: Length

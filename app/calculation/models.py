@@ -24,12 +24,12 @@ class Conditions(Model):
 
 class Inventory(Model):
     new_stock_quantity: Annotated[int, Field(strict=True, ge=0, le=100_000)]
-    remnants: list[Remnant] = Field(default_factory=list, max_length=1000)
+    remnants: list[Remnant] = Field(default_factory=list, max_length=10)
 
 class CalculationInput(Model):
     mode: Literal["required_stock", "inventory"]
     cutting_conditions: Conditions
-    required_parts: list[Part] = Field(min_length=1, max_length=1000)
+    required_parts: list[Part] = Field(min_length=1, max_length=20)
     inventory: Inventory | None = None
 
     @model_validator(mode="after")

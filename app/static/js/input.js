@@ -3,6 +3,12 @@ const form = document.querySelector("#calculation-form");
 const requiredPartsFields = document.querySelector("#part-rows").closest(".card");
 const calculateButton = form.querySelector(".calculate-button");
 const calculationScrollKey = "nesting1d-scroll-to-results";
+const INPUT_ROW_LIMITS = {"part-rows": 20, "remnant-rows": 10};
+
+function updateAddRowButton(button) {
+    const target = document.querySelector(`#${button.dataset.add}`);
+    button.disabled = target.querySelectorAll(".input-row").length >= INPUT_ROW_LIMITS[button.dataset.add];
+}
 
 function updateMode() {
     const selected = document.querySelector('input[name="mode"]:checked');
@@ -28,14 +34,19 @@ document.querySelectorAll('input[name="mode"]').forEach((input) => {
 document.querySelectorAll("[data-add]").forEach((button) => {
     button.addEventListener("click", () => {
         const target = document.querySelector(`#${button.dataset.add}`);
+        if (target.querySelectorAll(".input-row").length >= INPUT_ROW_LIMITS[button.dataset.add]) return;
         const templateName = button.dataset.add === "part-rows" ? "part-row-template" : "remnant-row-template";
         target.append(document.querySelector(`#${templateName}`).content.cloneNode(true));
+        updateAddRowButton(button);
     });
+    updateAddRowButton(button);
 });
 
 document.addEventListener("click", (event) => {
     if (event.target.matches(".remove")) {
+        const rowContainer = event.target.closest(".rows");
         event.target.closest(".input-row").remove();
+        updateAddRowButton(document.querySelector(`[data-add="${rowContainer.id}"]`));
         invalidateCalculationResult();
     }
     if (event.target.closest("[data-add]")) invalidateCalculationResult();
@@ -130,7 +141,8 @@ let jsonLoadedPendingCalculation = false;
 
 const LOCAL_JSON_MAX_BYTES = 5 * 1024 * 1024;
 const LOCAL_JSON_MAX_DEPTH = 8;
-const LOCAL_JSON_MAX_ROWS = 1000;
+const LOCAL_JSON_MAX_PART_ROWS = 20;
+const LOCAL_JSON_MAX_REMNANT_ROWS = 10;
 const LEGACY_MANAGEMENT_NUMBER = /^NEST-\d{8}-\d{3}$/;
 const CURRENT_MANAGEMENT_NUMBER = /^NEST-\d{8}-\d{6}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/;
 const TOKYO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?\+09:00$/;
@@ -214,6 +226,7 @@ function replaceRows(containerId, templateId, items, lengthName, quantityName) {
         row.querySelector(`[name="${quantityName}"]`).value = item.quantity ?? "";
         container.append(row);
     });
+    updateAddRowButton(document.querySelector(`[data-add="${containerId}"]`));
 }
 
 function applyRecord(record, message) {
@@ -273,15 +286,15 @@ function requireText(value) {
     return value;
 }
 
-function normalizeRows(rows, minimumRows) {
-    if (!Array.isArray(rows) || rows.length < minimumRows || rows.length > LOCAL_JSON_MAX_ROWS) {
+function normalizeRows(rows, minimumRows, maximumRows, maximumQuantity) {
+    if (!Array.isArray(rows) || rows.length < minimumRows || rows.length > maximumRows) {
         throw new LocalJsonValidationError("必要な入力情報が不足しています");
     }
     return rows.map((row) => {
         if (!isPlainObject(row)) throw new LocalJsonValidationError("JSONの形式が正しくありません");
         return {
             length_mm: requireSafeInteger(row.length_mm, 1, 1000000),
-            quantity: requireSafeInteger(row.quantity, 1, 100000),
+            quantity: requireSafeInteger(row.quantity, 1, maximumQuantity),
         };
     });
 }
@@ -321,7 +334,7 @@ function validateLocalRecord(record) {
             kerf_mm: requireSafeInteger(input.cutting_conditions.kerf_mm, 0, 10000),
             left_trim_mm: requireSafeInteger(input.cutting_conditions.left_trim_mm, 0, 10000),
         },
-        required_parts: normalizeRows(input.required_parts, 1),
+        required_parts: normalizeRows(input.required_parts, 1, LOCAL_JSON_MAX_PART_ROWS, 500),
     };
     if (normalizedInput.required_parts.reduce((total, row) => total + row.quantity, 0) > 1000000) {
         throw new LocalJsonValidationError("JSONの形式が正しくありません");
@@ -330,7 +343,7 @@ function validateLocalRecord(record) {
         if (!isPlainObject(input.inventory)) throw new LocalJsonValidationError("必要な入力情報が不足しています");
         normalizedInput.inventory = {
             new_stock_quantity: requireSafeInteger(input.inventory.new_stock_quantity, 0, 100000),
-            remnants: normalizeRows(input.inventory.remnants, 0),
+            remnants: normalizeRows(input.inventory.remnants, 0, LOCAL_JSON_MAX_REMNANT_ROWS, 100000),
         };
     } else if ("inventory" in input && input.inventory !== null) {
         throw new LocalJsonValidationError("JSONの形式が正しくありません");

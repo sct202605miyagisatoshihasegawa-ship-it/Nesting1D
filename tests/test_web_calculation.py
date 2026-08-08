@@ -322,6 +322,33 @@ def test_part_quantity_501_is_rejected_without_calculation(monkeypatch):
     assert "計算結果ダッシュボード" not in response.text
 
 
+def test_required_part_row_limit_accepts_20_and_rejects_21():
+    accepted = client.post("/", data=normal(part_length=["500"] * 20, part_quantity=["1"] * 20))
+    rejected = client.post("/", data=normal(part_length=["500"] * 21, part_quantity=["1"] * 21))
+
+    assert "計算結果ダッシュボード" in accepted.text
+    assert "入力件数または合計本数が上限を超えています。" in rejected.text
+    assert "計算結果ダッシュボード" not in rejected.text
+
+
+def test_inventory_remnant_row_and_quantity_limits():
+    accepted = client.post("/", data=normal(
+        mode="inventory", remnant_length=["1"] * 10, remnant_quantity=["100000"] * 10,
+    ))
+    too_many_rows = client.post("/", data=normal(
+        mode="inventory", remnant_length=["1"] * 11, remnant_quantity=["1"] * 11,
+    ))
+    too_many_items = client.post("/", data=normal(
+        mode="inventory", remnant_length="1", remnant_quantity="100001",
+    ))
+
+    assert "計算結果ダッシュボード" in accepted.text
+    assert "入力件数または合計本数が上限を超えています。" in too_many_rows.text
+    assert "計算結果ダッシュボード" not in too_many_rows.text
+    assert "在庫残材1行目の本数は1以上100000以下" in too_many_items.text
+    assert "計算結果ダッシュボード" not in too_many_items.text
+
+
 def test_form_declares_part_quantity_and_text_limits():
     html = client.get("/").text
     assert html.count('name="part_quantity" type="number" inputmode="numeric" min="1" max="500" step="1"') == 2

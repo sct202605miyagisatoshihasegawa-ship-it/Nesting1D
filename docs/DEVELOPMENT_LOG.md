@@ -346,3 +346,15 @@
 - 人間確認の結果：上記全項目合格。
 - 将来JavaScriptへ移植する際の注意点：500本・文字列長・64 KiBの各境界と、同一入力の再現性をクライアント実装後も同じ受入条件として維持する。
 - 次工程：最終の公開前確認。今回合格した負荷・入力境界試験は必要以上に繰り返さず、限定公開前の最終チェック項目を整理して実施する。
+
+## 2026-08-08：V1入力行数上限の正式仕様統一
+- 実装日：2026-08-08。
+- 実装した内容：必要部材の有効入力を最大20行、在庫残材を最大10行へ変更した。通常UIの行追加を用途別上限で抑止し、上限到達時の無効化と行削除後の再有効化を追加した。端末JSON読込も同じ行数上限へ統一し、必要部材1行の数量上限を500本、在庫残材を100,000本として分離した。
+- 実装理由：V1では現場で扱いやすい計算単位を前提とし、上限を超える場合は人間側で材質・規格・保管場所・作業単位などに整理・分割してから計算する正式運用へ統一するため。
+- 要件定義との対応：極端に大きな入力を制限する要件と、通常UI・フォームPOST・端末JSON読込の入力制約を一致させた。
+- 採用した設計：サーバーはPydanticモデルで有効行を検証し、空行を除外する既存フォーム処理を維持した。ブラウザは追加処理内でも行数を判定し、ボタンのdisabled状態だけに依存しない。
+- 変更したファイル：`app/calculation/models.py`、`app/static/js/input.js`、`app/templates/index.html`、`tests/test_web_calculation.py`、`tests/test_checkpoint5.py`、`docs/CALCULATION_EXAMPLES.md`、`docs/DECISIONS.md`、`docs/DEVELOPMENT_LOG.md`、`docs/TEST_RESULTS.md`。
+- 実行したテスト：`pytest -q tests/test_web_calculation.py tests/test_checkpoint5.py -p no:cacheprovider`、`pytest -q -p no:cacheprovider`、`git diff --check`、旧1,000行記述検索、変更範囲確認。
+- テスト結果：関連80件、全224件成功。失敗0件。既存のStarlette TestClient非推奨警告1件のみ。
+- 未解決事項：ブラウザ実機で20行・10行到達時の追加不可と、削除後の再追加を最終確認する。
+- 将来JavaScriptへ移植する際の注意点：必要部材20行・在庫残材10行と、各数量上限を用途別の共通定数として維持する。

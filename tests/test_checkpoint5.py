@@ -458,9 +458,21 @@ def test_local_json_structure_validation_contract():
     assert '!["required_stock", "inventory"].includes(input.mode)' in validator
     assert "Array.isArray(rows)" in javascript
     assert "Number.isSafeInteger(value)" in javascript
-    assert "LOCAL_JSON_MAX_ROWS = 1000" in javascript
+    assert "LOCAL_JSON_MAX_PART_ROWS = 20" in javascript
+    assert "LOCAL_JSON_MAX_REMNANT_ROWS = 10" in javascript
+    assert "normalizeRows(input.required_parts, 1, LOCAL_JSON_MAX_PART_ROWS, 500)" in javascript
+    assert "normalizeRows(input.inventory.remnants, 0, LOCAL_JSON_MAX_REMNANT_ROWS, 100000)" in javascript
     assert "LOCAL_JSON_MAX_DEPTH = 8" in javascript
     assert "value.length > LOCAL_JSON_MAX_BYTES" in javascript
+
+
+def test_dynamic_row_limits_and_reenable_contract():
+    javascript = Path("app/static/js/input.js").read_text(encoding="utf-8")
+    assert 'INPUT_ROW_LIMITS = {"part-rows": 20, "remnant-rows": 10}' in javascript
+    assert 'target.querySelectorAll(".input-row").length >= INPUT_ROW_LIMITS[button.dataset.add]' in javascript
+    assert javascript.count("updateAddRowButton(button)") >= 3
+    assert 'updateAddRowButton(document.querySelector(`[data-add="${rowContainer.id}"]`))' in javascript
+    assert 'updateAddRowButton(document.querySelector(`[data-add="${containerId}"]`))' in javascript
 
 
 def test_local_json_accepts_legacy_and_current_number_patterns_contract():
@@ -546,7 +558,7 @@ def test_public_v1_buttons_reach_only_direct_memory_exports():
     assert "/api/export/json" not in html_handler
     assert "downloadJson()" not in html_handler
     assert 'type="button"' in template
-    assert "?v=20260805-v1" in template
+    assert "?v=20260808-v1" in template
 
 
 def test_direct_exports_create_no_files_in_isolated_working_directory(tmp_path, monkeypatch):

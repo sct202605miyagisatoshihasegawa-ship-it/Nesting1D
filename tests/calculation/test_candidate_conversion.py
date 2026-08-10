@@ -1,3 +1,7 @@
+# Nesting1D - 候補変換テスト
+# 役割: 計算計画から選別候補への評価値と安定キーの変換を検証する。
+# 更新日: 2026-08-10
+
 from collections import Counter
 from copy import deepcopy
 

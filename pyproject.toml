@@ -1,3 +1,7 @@
+# Nesting1D - Pythonテスト設定
+# 役割: pytestのPythonパスとテスト探索先を定義する。
+# 更新日: 2026-08-10
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

@@ -1,3 +1,7 @@
+# Nesting1D - Python依存関係
+# 役割: Webアプリケーションとテスト環境で使用するPythonパッケージを固定する。
+# 更新日: 2026-08-10
+
 annotated-doc==0.0.4
 annotated-types==0.8.0
 anyio==4.14.2

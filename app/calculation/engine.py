@@ -1,3 +1,7 @@
+# Nesting1D - 一次元ネスティング計算エンジン
+# 役割: 入力条件から候補を生成し、選別した切断計画を計算結果へ変換する。
+# 更新日: 2026-08-10
+
 from collections import Counter
 from .models import CalculationInput, CalculationResult
 from .patterns import key, order, changes

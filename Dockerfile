@@ -1,4 +1,8 @@
-﻿FROM debian:bookworm-slim
+﻿# Nesting1D - 開発コンテナ定義
+# 役割: CodexとPython開発に使用する非rootの開発環境を構築する。
+# 更新日: 2026-08-10
+
+FROM debian:bookworm-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

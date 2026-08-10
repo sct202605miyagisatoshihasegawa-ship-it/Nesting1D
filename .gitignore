@@ -1,3 +1,7 @@
+# Nesting1D - Git除外設定
+# 役割: Python生成物、仮想環境、秘密情報、利用者データ等をGit管理から除外する。
+# 更新日: 2026-08-10
+
 # Python
 __pycache__/
 *.py[cod]

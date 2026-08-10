@@ -1,3 +1,7 @@
+# Nesting1D - JSON・HTML入出力テスト
+# 役割: レコード互換性、管理番号、端末出力、端末JSON読込の契約を検証する。
+# 更新日: 2026-08-10
+
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path

@@ -1,3 +1,7 @@
+# Nesting1D - 計算再現性テスト
+# 役割: 同一入力と入力順差に対する計算結果およびパターン順の決定性を検証する。
+# 更新日: 2026-08-10
+
 from app.calculation import CalculationInput, calculate
 from app.calculation.patterns import changes, key, order
 

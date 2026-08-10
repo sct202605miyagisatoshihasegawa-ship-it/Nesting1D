@@ -1,3 +1,7 @@
+# Nesting1D - HTTPリクエスト本文制限
+# 役割: 本文サイズ上限の設定を解析し、ASGI受信時に超過リクエストを拒否する。
+# 更新日: 2026-08-10
+
 import os
 
 from starlette import status

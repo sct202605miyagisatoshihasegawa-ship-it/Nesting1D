@@ -1,3 +1,7 @@
+# Nesting1D - 基本Webエンドポイントテスト
+# 役割: 初期画面とヘルスチェックの基本応答を検証する。
+# 更新日: 2026-08-10
+
 from fastapi.testclient import TestClient
 
 from app.main import app

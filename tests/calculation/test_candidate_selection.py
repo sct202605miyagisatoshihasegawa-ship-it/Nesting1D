@@ -1,3 +1,7 @@
+# Nesting1D - 候補選別単体テスト
+# 役割: 段階的選別順位、許容値、および安定キーによる決定を検証する。
+# 更新日: 2026-08-10
+
 from copy import deepcopy
 
 import pytest

@@ -1,3 +1,7 @@
+# Nesting1D - 計算候補選別
+# 役割: 候補を段階的な優先順位と安定キーで決定的に選別する。
+# 更新日: 2026-08-10
+
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 

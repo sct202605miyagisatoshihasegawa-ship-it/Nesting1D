@@ -1,3 +1,7 @@
+# Nesting1D - 必要母材計算テスト
+# 役割: 必要母材算出、加工長、入力境界、および残材分類を検証する。
+# 更新日: 2026-08-10
+
 import pytest
 from pydantic import ValidationError
 from app.calculation import CalculationInput, calculate

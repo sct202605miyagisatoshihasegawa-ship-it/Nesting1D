@@ -1,3 +1,9 @@
+/*
+ * Nesting1D - 入力画面クライアント処理
+ * 役割: モード切替、動的行、結果タブ、端末JSON読込、出力状態を制御する。
+ * 更新日: 2026-08-10
+ */
+
 const inventoryFields = document.querySelector(".inventory-fields");
 const form = document.querySelector("#calculation-form");
 const requiredPartsFields = document.querySelector("#part-rows").closest(".card");

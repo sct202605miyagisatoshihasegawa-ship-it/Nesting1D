@@ -1,3 +1,7 @@
+# Nesting1D - 本番Dockerビルド除外設定
+# 役割: 本番イメージへ渡すビルドコンテキストを必要なアプリ資材だけに限定する。
+# 更新日: 2026-08-10
+
 # Deny everything by default, then allow only the production build inputs.
 *
 !Dockerfile.prod

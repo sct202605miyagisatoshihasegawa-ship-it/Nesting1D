@@ -1,3 +1,7 @@
+# Nesting1D - HTTP本文サイズ制限テスト
+# 役割: 設定解析、境界値、ASGI受信、および400・413応答を検証する。
+# 更新日: 2026-08-10
+
 import asyncio
 import json
 

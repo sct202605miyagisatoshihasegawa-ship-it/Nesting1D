@@ -1,3 +1,7 @@
+# Nesting1D - FastAPIアプリケーション
+# 役割: 入力画面、計算POST、JSON・HTML出力、公開用HTTP応答を提供する。
+# 更新日: 2026-08-10
+
 import os
 from pathlib import Path
 from typing import Any

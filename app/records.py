@@ -1,3 +1,7 @@
+# Nesting1D - レコード識別情報と検証
+# 役割: バージョン、管理番号、日時、および出力レコードの互換性を管理する。
+# 更新日: 2026-08-10
+
 import re
 import secrets
 from datetime import datetime, timedelta

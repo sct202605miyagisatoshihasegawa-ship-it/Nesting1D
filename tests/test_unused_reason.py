@@ -1,3 +1,7 @@
+# Nesting1D - 未使用在庫理由テスト
+# 役割: 候補選別後の未使用理由とWeb・JSON・HTML表示の整合性を検証する。
+# 更新日: 2026-08-10
+
 import json
 from datetime import datetime
 from zoneinfo import ZoneInfo

@@ -1,3 +1,7 @@
+# Nesting1D - 出力レコード生成
+# 役割: JSON用レコードを構築し、切断指示書HTMLをテンプレートから生成する。
+# 更新日: 2026-08-10
+
 from copy import deepcopy
 from datetime import datetime
 from typing import Any

@@ -1,3 +1,7 @@
+# Nesting1D - 候補選別接続テスト
+# 役割: 計算エンジンの候補生成と候補選別の接続動作を検証する。
+# 更新日: 2026-08-10
+
 from copy import deepcopy
 from inspect import getsource
 

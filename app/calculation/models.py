@@ -1,3 +1,7 @@
+# Nesting1D - 計算データモデル
+# 役割: 計算入力・在庫・切断結果の構造と値制約をPydanticで定義する。
+# 更新日: 2026-08-10
+
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 

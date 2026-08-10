@@ -1,3 +1,7 @@
+# Nesting1D - Web計算フォームテスト
+# 役割: フォーム表示、POST検証、計算結果表示、および入力制約を検証する。
+# 更新日: 2026-08-10
+
 import re
 import pytest
 

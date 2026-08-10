@@ -1,3 +1,7 @@
+# Nesting1D - 在庫活用計算テスト
+# 役割: 在庫残材・在庫新品材・追加購入新品材を使う計算結果を検証する。
+# 更新日: 2026-08-10
+
 from app.calculation import CalculationInput, calculate
 
 def inventory(remnants, held, parts):

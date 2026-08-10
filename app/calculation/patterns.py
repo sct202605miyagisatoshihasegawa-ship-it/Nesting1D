@@ -1,3 +1,7 @@
+# Nesting1D - 切断パターン処理
+# 役割: 切断パターンの正規化、実施順、および寸法変更回数を計算する。
+# 更新日: 2026-08-10
+
 from collections import Counter
 
 def key(cuts):

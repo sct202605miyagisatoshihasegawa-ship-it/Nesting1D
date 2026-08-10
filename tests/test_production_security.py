@@ -1,3 +1,7 @@
+# Nesting1D - 本番公開セキュリティテスト
+# 役割: API文書公開条件、検索除外、キャッシュ制御、セキュリティヘッダーを検証する。
+# 更新日: 2026-08-10
+
 import importlib
 from pathlib import Path
 

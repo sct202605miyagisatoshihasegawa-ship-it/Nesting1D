@@ -1,4 +1,8 @@
-﻿services:
+﻿# Nesting1D - 開発コンテナ構成
+# 役割: 開発用サービス、ワークスペースマウント、ポート、Codex用ボリュームを定義する。
+# 更新日: 2026-08-10
+
+services:
   app:
     build:
       context: .

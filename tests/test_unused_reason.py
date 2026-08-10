@@ -190,8 +190,6 @@ def test_unknown_reason_code_keeps_existing_fallback() -> None:
     result = calculate(_candidate_selection_input())
     result.unused_inventory[0]["reason_code"] = "UNKNOWN_REASON"
 
-    view = main_module._display_result(
-        result, {"left_trim_mm": 0, "kerf_mm": 0}
-    )
+    view = main_module._display_result(result, 0, 0)
 
     assert view["unused_inventory"][0]["reason"] == "使用条件に合わないため未使用です"

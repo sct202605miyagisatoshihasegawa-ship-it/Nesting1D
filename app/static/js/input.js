@@ -293,7 +293,7 @@ function normalizeRows(rows, minimumRows, maximumRows, maximumQuantity) {
     return rows.map((row) => {
         if (!isPlainObject(row)) throw new LocalJsonValidationError("JSONの形式が正しくありません");
         return {
-            length_mm: requireSafeInteger(row.length_mm, 1, 1000000),
+            length_mm: requireSafeInteger(row.length_mm, 1, 6100),
             quantity: requireSafeInteger(row.quantity, 1, maximumQuantity),
         };
     });
@@ -330,20 +330,17 @@ function validateLocalRecord(record) {
         mode: input.mode,
         metadata,
         cutting_conditions: {
-            new_stock_length_mm: requireSafeInteger(input.cutting_conditions.new_stock_length_mm, 1, 1000000),
-            kerf_mm: requireSafeInteger(input.cutting_conditions.kerf_mm, 0, 10000),
-            left_trim_mm: requireSafeInteger(input.cutting_conditions.left_trim_mm, 0, 10000),
+            new_stock_length_mm: requireSafeInteger(input.cutting_conditions.new_stock_length_mm, 1, 6100),
+            kerf_mm: requireSafeInteger(input.cutting_conditions.kerf_mm, 0, 100),
+            left_trim_mm: requireSafeInteger(input.cutting_conditions.left_trim_mm, 0, 100),
         },
         required_parts: normalizeRows(input.required_parts, 1, LOCAL_JSON_MAX_PART_ROWS, 500),
     };
-    if (normalizedInput.required_parts.reduce((total, row) => total + row.quantity, 0) > 1000000) {
-        throw new LocalJsonValidationError("JSONの形式が正しくありません");
-    }
     if (input.mode === "inventory") {
         if (!isPlainObject(input.inventory)) throw new LocalJsonValidationError("必要な入力情報が不足しています");
         normalizedInput.inventory = {
-            new_stock_quantity: requireSafeInteger(input.inventory.new_stock_quantity, 0, 100000),
-            remnants: normalizeRows(input.inventory.remnants, 0, LOCAL_JSON_MAX_REMNANT_ROWS, 100000),
+            new_stock_quantity: requireSafeInteger(input.inventory.new_stock_quantity, 0, 500),
+            remnants: normalizeRows(input.inventory.remnants, 0, LOCAL_JSON_MAX_REMNANT_ROWS, 500),
         };
     } else if ("inventory" in input && input.inventory !== null) {
         throw new LocalJsonValidationError("JSONの形式が正しくありません");

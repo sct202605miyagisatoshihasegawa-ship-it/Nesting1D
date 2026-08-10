@@ -49,10 +49,96 @@ def test_calculation_result_remainder_boundary_does_not_depend_on_kerf(
     assert usage["remainder_class"] == expected
     assert used_length([400,400],20,3) == 829
 
-@pytest.mark.parametrize("value", [0,-1,1.5,"10",1_000_001])
+@pytest.mark.parametrize("value", [0,-1,1.5,"10",6_101])
 def test_invalid_lengths(value):
     with pytest.raises(ValidationError):
         request(cutting_conditions={"new_stock_length_mm":value,"kerf_mm":0,"left_trim_mm":0})
+
+
+@pytest.mark.parametrize(
+    ("path", "accepted", "rejected"),
+    [
+        (("cutting_conditions", "new_stock_length_mm"), 6_100, 6_101),
+        (("cutting_conditions", "kerf_mm"), 100, 101),
+        (("cutting_conditions", "left_trim_mm"), 100, 101),
+        (("required_parts", 0, "length_mm"), 6_100, 6_101),
+        (("required_parts", 0, "quantity"), 500, 501),
+    ],
+)
+def test_required_input_model_final_boundaries(path, accepted, rejected):
+    base = {
+        "mode": "required_stock",
+        "cutting_conditions": {
+            "new_stock_length_mm": 6_100,
+            "kerf_mm": 0,
+            "left_trim_mm": 0,
+        },
+        "required_parts": [{"length_mm": 1, "quantity": 1}],
+    }
+
+    target = base
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = accepted
+    CalculationInput.model_validate(base)
+    target[path[-1]] = rejected
+    with pytest.raises(ValidationError):
+        CalculationInput.model_validate(base)
+
+
+@pytest.mark.parametrize(
+    ("field", "accepted", "rejected"),
+    [
+        ("new_stock_quantity", 500, 501),
+        ("remnant_length", 6_100, 6_101),
+        ("remnant_quantity", 500, 501),
+    ],
+)
+def test_inventory_input_model_final_boundaries(field, accepted, rejected):
+    base = {
+        "mode": "inventory",
+        "cutting_conditions": {
+            "new_stock_length_mm": 6_100,
+            "kerf_mm": 0,
+            "left_trim_mm": 0,
+        },
+        "required_parts": [{"length_mm": 1, "quantity": 1}],
+        "inventory": {
+            "new_stock_quantity": 0,
+            "remnants": [{"length_mm": 1, "quantity": 1}],
+        },
+    }
+    if field == "new_stock_quantity":
+        target = base["inventory"]
+        key = field
+    else:
+        target = base["inventory"]["remnants"][0]
+        key = field.removeprefix("remnant_") + ("_mm" if field == "remnant_length" else "")
+    target[key] = accepted
+    CalculationInput.model_validate(base)
+    target[key] = rejected
+    with pytest.raises(ValidationError):
+        CalculationInput.model_validate(base)
+
+
+def test_model_row_limits_accept_20_and_10_then_reject_one_more():
+    required = {
+        "mode": "required_stock",
+        "cutting_conditions": {"new_stock_length_mm": 100, "kerf_mm": 0, "left_trim_mm": 0},
+        "required_parts": [{"length_mm": 1, "quantity": 1}] * 20,
+    }
+    CalculationInput.model_validate(required)
+    with pytest.raises(ValidationError):
+        CalculationInput.model_validate(required | {"required_parts": required["required_parts"] + [{"length_mm": 1, "quantity": 1}]})
+
+    inventory = required | {
+        "mode": "inventory",
+        "inventory": {"new_stock_quantity": 0, "remnants": [{"length_mm": 1, "quantity": 1}] * 10},
+    }
+    CalculationInput.model_validate(inventory)
+    inventory["inventory"]["remnants"].append({"length_mm": 1, "quantity": 1})
+    with pytest.raises(ValidationError):
+        CalculationInput.model_validate(inventory)
 
 def test_duplicate_dimensions_are_aggregated():
     data=request(cutting_conditions={"new_stock_length_mm":1000,"kerf_mm":0,"left_trim_mm":0},required_parts=[{"length_mm":400,"quantity":1},{"length_mm":300,"quantity":2},{"length_mm":400,"quantity":1}])

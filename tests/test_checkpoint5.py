@@ -22,6 +22,11 @@ TOKYO = ZoneInfo("Asia/Tokyo")
 FIXED_TIME = datetime(2026, 7, 26, 10, 20, 30, tzinfo=TOKYO)
 
 
+def test_public_v1_patch_version_is_consistent():
+    assert APP_VERSION == "1.0.1"
+    assert main_module.app.version == APP_VERSION
+
+
 def saved_input(**metadata):
     return {
         "mode": "required_stock",
@@ -461,9 +466,30 @@ def test_local_json_structure_validation_contract():
     assert "LOCAL_JSON_MAX_PART_ROWS = 20" in javascript
     assert "LOCAL_JSON_MAX_REMNANT_ROWS = 10" in javascript
     assert "normalizeRows(input.required_parts, 1, LOCAL_JSON_MAX_PART_ROWS, 500)" in javascript
-    assert "normalizeRows(input.inventory.remnants, 0, LOCAL_JSON_MAX_REMNANT_ROWS, 100000)" in javascript
+    assert "normalizeRows(input.inventory.remnants, 0, LOCAL_JSON_MAX_REMNANT_ROWS, 500)" in javascript
+    assert "requireSafeInteger(row.length_mm, 1, 6100)" in javascript
+    assert "requireSafeInteger(input.cutting_conditions.new_stock_length_mm, 1, 6100)" in javascript
+    assert "requireSafeInteger(input.cutting_conditions.kerf_mm, 0, 100)" in javascript
+    assert "requireSafeInteger(input.cutting_conditions.left_trim_mm, 0, 100)" in javascript
+    assert "requireSafeInteger(input.inventory.new_stock_quantity, 0, 500)" in javascript
+    assert "1000000" not in validator
     assert "LOCAL_JSON_MAX_DEPTH = 8" in javascript
     assert "value.length > LOCAL_JSON_MAX_BYTES" in javascript
+
+
+def test_html_instruction_uses_saved_numeric_trim_and_kerf():
+    data = saved_input()
+    data["cutting_conditions"] = {
+        "new_stock_length_mm": 1_000,
+        "kerf_mm": 3,
+        "left_trim_mm": 17,
+    }
+    data["required_parts"] = [{"length_mm": 100, "quantity": 1}]
+    _, result, view = main_module._saved_input(data)
+    record = make_record("NEST-20260726-001", FIXED_TIME, data, result.model_dump())
+    html = render_report(main_module.templates, record, view)
+    assert "左端を17mm捨て切り" in html
+    assert "鋸刃厚3mm" in html
 
 
 def test_dynamic_row_limits_and_reenable_contract():
@@ -558,7 +584,7 @@ def test_public_v1_buttons_reach_only_direct_memory_exports():
     assert "/api/export/json" not in html_handler
     assert "downloadJson()" not in html_handler
     assert 'type="button"' in template
-    assert "?v=20260808-v1" in template
+    assert "?v=20260810-v1" in template
 
 
 def test_direct_exports_create_no_files_in_isolated_working_directory(tmp_path, monkeypatch):

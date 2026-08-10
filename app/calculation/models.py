@@ -1,10 +1,10 @@
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-Length = Annotated[int, Field(strict=True, ge=1, le=1_000_000)]
-Count = Annotated[int, Field(strict=True, ge=1, le=100_000)]
+Length = Annotated[int, Field(strict=True, ge=1, le=6_100)]
+Count = Annotated[int, Field(strict=True, ge=1, le=500)]
 PartCount = Annotated[int, Field(strict=True, ge=1, le=500)]
-Condition = Annotated[int, Field(strict=True, ge=0, le=10_000)]
+Condition = Annotated[int, Field(strict=True, ge=0, le=100)]
 
 class Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -23,7 +23,7 @@ class Conditions(Model):
     left_trim_mm: Condition = 10
 
 class Inventory(Model):
-    new_stock_quantity: Annotated[int, Field(strict=True, ge=0, le=100_000)]
+    new_stock_quantity: Annotated[int, Field(strict=True, ge=0, le=500)]
     remnants: list[Remnant] = Field(default_factory=list, max_length=10)
 
 class CalculationInput(Model):
@@ -36,8 +36,6 @@ class CalculationInput(Model):
     def valid(self):
         if (self.mode == "inventory") != (self.inventory is not None):
             raise ValueError("modeとinventoryが一致しません")
-        if sum(x.quantity for x in self.required_parts) > 1_000_000:
-            raise ValueError("合計必要本数は1000000以下です")
         return self
 
 class CalculationResult(Model):

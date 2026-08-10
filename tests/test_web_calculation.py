@@ -183,7 +183,7 @@ def test_inline_errors_mark_only_invalid_fields_and_keep_row_indexes():
     assert 'class="field-error-input"' in invalid_quantity
     assert 'id="error-part-length-1"' in response.text
     assert 'id="error-part-quantity-1"' in response.text
-    assert "1以上1000000以下の整数を入力してください。" in response.text
+    assert "1以上6100以下の整数を入力してください。" in response.text
     assert "1以上500以下の整数を入力してください。" in response.text
     assert "計算結果ダッシュボード" not in response.text
 
@@ -200,13 +200,13 @@ def test_impossible_part_has_inline_error_using_engine_length_rule():
 def test_inventory_inline_errors_stay_with_their_fields():
     response=client.post("/",data=normal(mode="inventory",new_stock_quantity="bad",remnant_length=["600","700"],remnant_quantity=["1",""]))
     assert 'id="error-new-stock-quantity"' in response.text
-    assert "0以上100000以下の整数を入力してください。" in response.text
+    assert "0以上500以下の整数を入力してください。" in response.text
     assert 'id="error-remnant-quantity-1"' in response.text
     assert "保有本数を入力してください。" in response.text
     assert 'id="error-remnant-quantity-0"' not in response.text
 
 def test_invalid_integer_and_range_errors():
-    for value in ("0","-1","1.5","abc","1000001"):
+    for value in ("0","-1","1.5","abc","6101"):
         response=client.post("/",data=normal(new_stock_length_mm=value))
         assert "新品母材長は" in response.text
         assert "計算結果ダッシュボード" not in response.text
@@ -327,25 +327,25 @@ def test_required_part_row_limit_accepts_20_and_rejects_21():
     rejected = client.post("/", data=normal(part_length=["500"] * 21, part_quantity=["1"] * 21))
 
     assert "計算結果ダッシュボード" in accepted.text
-    assert "入力件数または合計本数が上限を超えています。" in rejected.text
+    assert "入力行数が上限を超えています。" in rejected.text
     assert "計算結果ダッシュボード" not in rejected.text
 
 
 def test_inventory_remnant_row_and_quantity_limits():
     accepted = client.post("/", data=normal(
-        mode="inventory", remnant_length=["1"] * 10, remnant_quantity=["100000"] * 10,
+        mode="inventory", remnant_length=["1"] * 10, remnant_quantity=["500"] * 10,
     ))
     too_many_rows = client.post("/", data=normal(
         mode="inventory", remnant_length=["1"] * 11, remnant_quantity=["1"] * 11,
     ))
     too_many_items = client.post("/", data=normal(
-        mode="inventory", remnant_length="1", remnant_quantity="100001",
+        mode="inventory", remnant_length="1", remnant_quantity="501",
     ))
 
     assert "計算結果ダッシュボード" in accepted.text
-    assert "入力件数または合計本数が上限を超えています。" in too_many_rows.text
+    assert "入力行数が上限を超えています。" in too_many_rows.text
     assert "計算結果ダッシュボード" not in too_many_rows.text
-    assert "在庫残材1行目の本数は1以上100000以下" in too_many_items.text
+    assert "在庫残材1行目の本数は1以上500以下" in too_many_items.text
     assert "計算結果ダッシュボード" not in too_many_items.text
 
 
@@ -354,6 +354,48 @@ def test_form_declares_part_quantity_and_text_limits():
     assert html.count('name="part_quantity" type="number" inputmode="numeric" min="1" max="500" step="1"') == 2
     for name, maximum in (("title", 20), ("material_type", 30), ("author", 30), ("notes", 400)):
         assert f'name="{name}" maxlength="{maximum}"' in html
+
+
+@pytest.mark.parametrize(
+    ("field", "accepted", "rejected", "updates"),
+    [
+        ("new_stock_quantity", "500", "501", {"mode": "inventory"}),
+        ("remnant_quantity", "500", "501", {"mode": "inventory", "remnant_length": "1"}),
+        ("new_stock_length_mm", "6100", "6101", {"kerf_mm": "0", "left_trim_mm": "0", "part_length": "1"}),
+        ("part_length", "6100", "6101", {"new_stock_length_mm": "6100", "kerf_mm": "0", "left_trim_mm": "0"}),
+        ("remnant_length", "6100", "6101", {"mode": "inventory", "new_stock_length_mm": "6100", "kerf_mm": "0", "left_trim_mm": "0", "part_length": "1", "remnant_quantity": "1"}),
+        ("kerf_mm", "100", "101", {"new_stock_length_mm": "6100", "left_trim_mm": "0", "part_length": "1"}),
+        ("left_trim_mm", "100", "101", {"new_stock_length_mm": "6100", "kerf_mm": "0", "part_length": "1"}),
+    ],
+)
+def test_form_post_final_numeric_boundaries(field, accepted, rejected, updates):
+    accepted_response = client.post("/", data=normal(**updates, **{field: accepted}))
+    rejected_response = client.post("/", data=normal(**updates, **{field: rejected}))
+    assert "計算結果ダッシュボード" in accepted_response.text
+    assert "計算結果ダッシュボード" not in rejected_response.text
+
+
+def test_form_declares_all_final_numeric_limits_in_static_and_dynamic_rows():
+    html = client.get("/").text
+    limits = {
+        "new_stock_length_mm": (1, 6100),
+        "kerf_mm": (0, 100),
+        "left_trim_mm": (0, 100),
+        "part_length": (1, 6100),
+        "part_quantity": (1, 500),
+        "new_stock_quantity": (0, 500),
+        "remnant_length": (1, 6100),
+        "remnant_quantity": (1, 500),
+    }
+    for name, (minimum, maximum) in limits.items():
+        expected = f'name="{name}" type="number" inputmode="numeric" min="{minimum}" max="{maximum}" step="1"'
+        assert html.count(expected) == (2 if name in {"part_length", "part_quantity", "remnant_length", "remnant_quantity"} else 1)
+
+
+def test_cutting_instruction_uses_validated_trim_and_kerf_values():
+    response = client.post("/", data=normal(new_stock_length_mm="1000", left_trim_mm="17", kerf_mm="3", part_length="100", part_quantity="1"))
+    assert '左端を<span class="measurement">17mm</span>捨て切りします' in response.text
+    assert "鋸刃厚<span class=\"measurement\">3mm</span>" in response.text
 
 
 @pytest.mark.parametrize(

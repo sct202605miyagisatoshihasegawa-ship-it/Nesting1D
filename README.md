@@ -215,6 +215,4 @@ AIの出力はそのまま採用せず、要件・仕様・設計判断と照合
 - [開発履歴](docs/DEVELOPMENT_LOG.md)
 - [開発工程・Checkpoint](docs/DEVELOPMENT_ROADMAP.md)
 
-## ライセンス
 
-ライセンスは未決定です。GitHub公開前の最終確認で決定します。
